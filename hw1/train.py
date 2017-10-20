@@ -20,12 +20,13 @@ set_session(tf.Session(config=config))
 from keras.models import Sequential
 from keras.layers import Dense, Activation
 from keras.layers import Dropout
-from keras.layers import SimpleRNN, LSTM
+from keras.layers import SimpleRNN, LSTM, GRU
 from keras.layers.wrappers import TimeDistributed
 
 from keras import initializers
 from keras.utils import np_utils
 from keras.optimizers import RMSprop, Adam
+from keras.models import load_model
 
 # For reproducibilty
 np.random.seed(7)
@@ -141,14 +142,16 @@ else:
 # y_train[0].shape would be (num_frames,)
 
 # Model parameter settings
-padding_size=2
-batch_size=64
-epochs=100
-optimizer = RMSprop(clipvalue=100)
+padding_size=8
+batch_size=90
+epochs=1
+optimizer = RMSprop(clipnorm=1.)
 #optimizer = RMSprop()
 
-data_dim=x_train[0].shape[1]
-timesteps=2*padding_size+1
+#data_dim=x_train[0].shape[1]
+data_dim=108
+#timesteps=2*padding_size+1
+timesteps=padding_size+1
 num_classes=39
 
 # Pad the sequence by zero to proceed sliding window
@@ -157,18 +160,19 @@ for i in range(len(x_train)):
     x_train[i] = x_train[i].astype(np.float32)
     for p in range(padding_size):
         x_train[i] = np.insert(x_train[i],0,0.0,axis=0)
-        x_train[i] = np.insert(x_train[i],x_train[i].shape[0],0.0,axis=0)
+        #x_train[i] = np.insert(x_train[i],x_train[i].shape[0],0.0,axis=0)
 
 # Reshape data by sliding window (shape=(timesteps,data_dim))
 # Expect x_train_r.shape=(num_data, timesteps, data_dim)
 sys.stderr.write('Reshaping x_train...\n')
 x_train_r=[]  # reshaped x_train
 for sent in x_train:
-    num_windows=sent.shape[0]-2*padding_size
+    #num_windows=sent.shape[0]-2*padding_size
+    num_windows=sent.shape[0]-padding_size
     for i in range(num_windows):
         window=sent[i:i+timesteps,:]
         x_train_r.append(window)
-        
+    
 x_train_r=np.array(x_train_r)
 
 # Expect y_train_r.shape=(num_data, num_classes)
@@ -183,27 +187,34 @@ for sent in y_train:
 y_train_r=np.array(y_train_r)
 y_train_r=np_utils.to_categorical(y_train_r)
 
-# Building LSTM models
+print(x_train_r.shape, y_train_r.shape)
+print(x_train_r[:10,:10,:].tolist())
+print(y_train_r[:10,:].tolist())
+
+# Build LSTM models
 sys.stderr.write('Building LSTM model...\n')
 model = Sequential()
-model.add(LSTM(32, return_sequences=True,
-          input_shape=(timesteps, data_dim))) 
-#model.add(LSTM(32, return_sequences=True)) 
+model.add(SimpleRNN(512, return_sequences=True,
+          input_shape=(timesteps, data_dim)))
 model.add(Dropout(0.2))
-model.add(LSTM(32))
+model.add(SimpleRNN(256, return_sequences=True)) 
+model.add(GRU(128))
 model.add(Dropout(0.2))
+model.add(Dense(128, activation='relu'))
 model.add(Dense(64, activation='relu'))
 model.add(Dense(num_classes, activation='softmax'))
 model.compile(loss='categorical_crossentropy',
               optimizer=optimizer,
               metrics=['accuracy'])
-
-model.fit(x_train_r[:1000000,:,:], y_train_r[:1000000,:],
-          batch_size=batch_size, epochs=epochs,
-          validation_data=(x_train_r[1000000:,:,:],y_train_r[1000000:,:]))
-loss, accuracy = model.evaluate(x_train_r[1000000:,:,:],y_train_r[1000000:,:],
-                                batch_size=batch_size)
-sys.stderr.write('End training with loss=%f and accuracy=%f\n' % (loss,accuracy))
 model.summary()
 
+model.fit(x_train_r[:200000,:,:], y_train_r[:200000,:],
+          batch_size=batch_size,
+          epochs=epochs,
+          validation_split=0.5)
+          
 model.save(sys.argv[2])
+
+loss, accuracy = model.evaluate(x_train_r[900000:,:,:],y_train_r[900000:,:],
+                            batch_size=batch_size)                     
+sys.stderr.write('End training with loss=%f and accuracy=%f\n' % (loss,accuracy))
