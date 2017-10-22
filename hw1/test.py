@@ -56,6 +56,7 @@ with open(data_path+'48phone_char.map','r') as m:
         char_mapping[line[0]]=line[2]
 
 # Create index mappings
+# using 39 phones
 phone_index={}
 index_phone=[]
 with open('phone_index.map','r') as m:
@@ -63,7 +64,14 @@ with open('phone_index.map','r') as m:
         line=line.strip('\n').split('\t')
         phone_index[line[0]]=line[1]
         index_phone.append(line[0])
-
+'''
+# using 48 phones
+with open(data_path+'48phone_char.map','r') as m:
+    for line in m:
+        line=line.strip('\n').split('\t')
+        phone_index[line[0]]=line[1]
+        index_phone.append(line[0])
+'''
 # Read test data
 sys.stderr.write('Load mfcc/test.ark...\n')
 mfcc_df=pd.read_csv(data_path+'mfcc/test.ark',
@@ -88,8 +96,6 @@ i=0
 for name in sent_name:
     sys.stderr.write('Processing instance #%d...\n' % i)
     i+=1
-    if i==5:
-        break
     
     mfcc=mfcc_df.iloc[mfcc_df.index.str.startswith(name)]
     mfcc=mfcc.as_matrix().astype(np.float32)
@@ -111,7 +117,7 @@ del fbank_df
 
 # Model parameter settings
 frame_size=400      # padding size
-batch_size =16
+#batch_size =16
 
 data_dim=69         # take only fbank feature into consideration
 dummy_class=39
@@ -119,24 +125,25 @@ num_classes=39+1    # +1 for dummy class
 
 # Pad 0 / Split x_test into timesteps=400
 sys.stderr.write('Processing x_test...\n')
-num_split=[]        # number of splits for each sentence (len=num_sent)
-x_test_split=[]     # x_test after splitting; should have length 688 here
+num_split=np.zeros(num_sent).astype(int)  # number of splits for each sentence (len=num_sent)
+
+x_test_split=[]  # x_test after splitting; should have length 688 here
 for i in range(num_sent):
     # Split data if len(x_test[i]) > frame_size
-    num_split.append(len(x_test[i])//frame_size+1)
+    num_split[i]=((len(x_test[i])//frame_size)+1)
+    
+    padding=np.zeros((num_split[i]*frame_size,data_dim))
+    index=-min(num_split[i]*frame_size,x_test[i].shape[0])
+    padding[index:] = (x_test[i][index:])[:,-data_dim:] # take only fbank feature
+    #print(padding)
     
     for k in range(num_split[i]):
-        split = x_test[i][frame_size*k:frame_size*(k+1)]
-        print(split.shape)
-        print(num_split)
-        padding=np.zeros((frame_size,data_dim))
-        index=-min(frame_size,split.shape[0])
-        
-        padding[index:] = (split[i][index:])[:,-data_dim:]
-        # take only fbank feature
-        #x_test[i] = padding.copy()
+        split=padding[frame_size*k:frame_size*(k+1)]
+        x_test_split.append(split)
 
 x_test_split=np.array(x_test_split)
+#print(x_test_split)
+#print(x_test_split.shape)
 
 '''
 # Pad the sequence by zero to proceed sliding window
@@ -162,8 +169,6 @@ for i in range(len(x_test)):
     x_test_r.append(np.array(r))
 '''
 
-print(x_test_split.shape)
-print(x_test_split[0:5])
 
 # Load trained model
 sys.stderr.write('Load trained model...\n')
@@ -173,45 +178,39 @@ model = load_model(sys.argv[2])
 # Prdiction
 sys.stderr.write('Predicting...\n' )
 print('id,phone_sequence')
-y_test_split = model.predict_classes(x_test_split,batch_size=batch_size,verbose=0)
+y_test_split = model.predict_classes(x_test_split,verbose=0)
 
+y_test_split = np.array(y_test_split)
+#print(y_test_split)
 
-k=0
 y_test=[]
+k=0
 for i in range(len(num_split)):
-    tmp = []
-    for j in range(num_split[i]):
-        y = y_test.tolist[k]
-        tmp = tmp + y_test_split
-        k += 1
+    tmp=[]
+    for n in range(num_split[i]):
+        y=y_test_split[k].tolist()
+        tmp=tmp+y
+        
+        k+=1
     y_test.append(tmp)
-
 print(y_test)
 
-for i in range(len(y_test)):
+for i, y in enumerate(y_test):
     seq = ''
     for l in y:
         try:
             seq += char_mapping[index_phone[l]]
         except:
             seq += ''
+    
     # Trimming
-    seq = ''.join(i for i, _ in itertools.groupby(seq))
+    grouping = []
+    for _, g in itertools.groupby(seq):
+        grouping.append(list(g))
+    # Drop isolated labels
+    seq = ''.join([g[0] if len(g)>=3 else '' for g in grouping])
+    
+    #seq = ''.join(i for i, _ in itertools.groupby(seq))
     seq = seq.strip(char_mapping['sil'])
     
     print(sent_name[i]+','+seq)
-'''
-for i, x_test in enumerate(x_test_r):
-    
-    res = model.predict_classes(x_test,verbose=0)
-    res = res.tolist()
-    seq = ''
-    for l in res:
-        seq += char_mapping[index_phone[l]]
-    
-    # Trimming
-    seq = ''.join(i for i, _ in itertools.groupby(seq))
-    seq = seq.strip(char_mapping['sil'])
-    
-    print(sent_name[i]+','+seq)
-'''
