@@ -12,14 +12,14 @@ from keras.backend.tensorflow_backend import set_session
 config = tf.ConfigProto()
 config.gpu_options.allow_growth=True
 #config.gpu_options.per_process_gpu_memory_fraction=0.333
-config.intra_op_parallelism_threads=1
-config.inter_op_parallelism_threads=1
+config.intra_op_parallelism_threads=2
+config.inter_op_parallelism_threads=4
 
 set_session(tf.Session(config=config))
 
 from keras.models import Sequential
 from keras.layers import Dense, Activation
-from keras.layers import Dropout
+from keras.layers import Dropout, Reshape, Masking
 from keras.layers import SimpleRNN, LSTM, GRU
 from keras.layers.wrappers import TimeDistributed
 
@@ -50,7 +50,7 @@ with open(data_path+'phones/48_39.map','r') as m:
 # Create index mappings
 phone_index={}
 index_phone=[]
-with open(data_path+'phone_index.map','r') as m:
+with open('phone_index.map','r') as m:
     for line in m:
         line=line.strip('\n').split('\t')
         phone_index[line[0]]=line[1]
@@ -76,7 +76,7 @@ if read_raw_data:
     label_df=pd.read_csv(data_path+'label/train.lab',
                          header=None,
                          index_col=0)
-    label_df=label_df.replace(mapping)
+    #label_df=label_df.replace(mapping)
     
     # pd.concat will align data automatically yet losing original order
     #mfcc_df=pd.concat([label_df,mfcc_df],axis=1,index=None)
@@ -138,22 +138,93 @@ else:
         y_train = pickle.load(y_f)
 
 # len(x_train)==len(y_train)==num_sentences
+if len(x_train)!=len(y_train):
+    raise Exception
+num_sent = len(x_train)
+
 # x_train[0].shape would be (num_frames, data_dim==39+69)
 # y_train[0].shape would be (num_frames,)
 
 # Model parameter settings
-padding_size=8
-batch_size=90
-epochs=1
+frame_size=400    # padding size
+epochs=96
+
+data_dim=69         # take only fbank feature into consideration
+dummy_class=39
+num_classes=39+1    # +1 for dummy class
+
+# Pad 0. / Truncate x_train into timesteps=400
+sys.stderr.write('Processing x_train...\n')
+for i in range(num_sent):
+    padding=np.zeros((frame_size,data_dim))
+    index=-min(frame_size,x_train[i].shape[0])
+    
+    padding[index:] = (x_train[i][index:])[:,-data_dim:]
+    # take only fbank feature
+    x_train[i] = padding.copy()
+
+# x_train.shape should be (3696,400,69)
+x_train=np.array(x_train)
+#print(x_train.shape)
+
+#print(x_train[0], x_train[1])
+#print(len(x_train), len(y_train))
+
+# Pad / Truncate y_train to confirm dim.
+# use 39 as the index of "dummy class"
+sys.stderr.write('Processing y_train...\n')
+for i in range(num_sent):
+    sent = y_train[i].flatten().tolist()
+    labels = [phone_index[mapping[l]] for l in sent]
+    labels = np.array(labels)
+    
+    padding = np.full(frame_size,dummy_class)
+    index=-min(frame_size,len(sent))
+    padding[index:] = labels[index:]
+    y_train[i] = np_utils.to_categorical(padding, num_classes=num_classes)
+
+y_train=np.array(y_train)
+
+# y_train should be list of (400,40) with len=3692
+print(y_train.shape)
+#print(len(y_train))
+
+# Build LSTM models
+sys.stderr.write('Building NN model...\n')
+
 optimizer = RMSprop(clipnorm=1.)
-#optimizer = RMSprop()
+batch_size = 32
 
-#data_dim=x_train[0].shape[1]
-data_dim=108
-#timesteps=2*padding_size+1
-timesteps=padding_size+1
-num_classes=39
+model = Sequential()
+model.add(Masking(mask_value=0., input_shape=(frame_size, data_dim)))
+model.add(LSTM(128, return_sequences=True,
+          input_shape=(frame_size, data_dim)))
+model.add(Dropout(0.2))
 
+#model.add(Masking(mask_value=0.))
+#model.add(GRU(64, return_sequences=True))
+#model.add(GRU(128))
+model.add(Dense(256, activation='relu'))
+#model.add(Dense(128, activation='relu'))
+model.add(Dropout(0.5))
+model.add(Dense(128, activation='relu'))
+model.add(Dense(64, activation='relu'))
+#model.add(Dense(64, activation='relu'))
+model.add(Dense(num_classes, activation='softmax'))
+model.compile(loss='categorical_crossentropy',
+              optimizer='adam',
+              metrics=['accuracy'])
+model.summary()
+try:
+    model.fit(x_train, y_train,
+              batch_size=batch_size,
+              epochs=epochs,
+              validation_split=0.05)
+except:
+    model.save(sys.argv[2])
+              
+model.save(sys.argv[2])
+'''
 # Pad the sequence by zero to proceed sliding window
 sys.stderr.write('Paddind zeros...\n')
 for i in range(len(x_train)):
@@ -218,3 +289,4 @@ model.save(sys.argv[2])
 loss, accuracy = model.evaluate(x_train_r[900000:,:,:],y_train_r[900000:,:],
                             batch_size=batch_size)                     
 sys.stderr.write('End training with loss=%f and accuracy=%f\n' % (loss,accuracy))
+'''
