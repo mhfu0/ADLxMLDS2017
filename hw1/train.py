@@ -12,7 +12,7 @@ from keras.backend.tensorflow_backend import set_session
 config = tf.ConfigProto()
 config.gpu_options.allow_growth=True
 #config.gpu_options.per_process_gpu_memory_fraction=0.333
-config.intra_op_parallelism_threads=2
+config.intra_op_parallelism_threads=1
 config.inter_op_parallelism_threads=4
 
 set_session(tf.Session(config=config))
@@ -41,21 +41,35 @@ read_raw_data=False
 
 # Create phone mapping
 sys.stderr.write('Create phone mappings...\n')
-mapping={}
+mapping={}  # 48 -> 39 label mapping
 with open(data_path+'phones/48_39.map','r') as m:
     for line in m:
         line=line.strip('\n').split('\t')
         mapping[line[0]]=line[1]
-        
+
+char_mapping={}  # label -> char mapping
+with open(data_path+'48phone_char.map','r') as m:
+    for line in m:
+        line=line.strip('\n').split('\t')
+        char_mapping[line[0]]=line[2]
+
 # Create index mappings
-phone_index={}
-index_phone=[]
+phone_index={}  # label -> 48
+index_phone=[]  # 48 -> label
+'''
+# using 39 phones
 with open('phone_index.map','r') as m:
     for line in m:
         line=line.strip('\n').split('\t')
         phone_index[line[0]]=line[1]
         index_phone.append(line[0])
-
+'''
+# using 48 phones
+with open(data_path+'48phone_char.map','r') as m:
+    for line in m:
+        line=line.strip('\n').split('\t')
+        phone_index[line[0]]=line[1]
+        index_phone.append(line[0])
 
 # Read raw data if needed
 if read_raw_data:
@@ -147,11 +161,11 @@ num_sent = len(x_train)
 
 # Model parameter settings
 frame_size=400    # padding size
-epochs=96
+epochs=2000
 
 data_dim=69         # take only fbank feature into consideration
-dummy_class=39
-num_classes=39+1    # +1 for dummy class
+dummy_class=48
+num_classes=48+1    # +1 for dummy class
 
 # Pad 0. / Truncate x_train into timesteps=400
 sys.stderr.write('Processing x_train...\n')
@@ -171,11 +185,11 @@ x_train=np.array(x_train)
 #print(len(x_train), len(y_train))
 
 # Pad / Truncate y_train to confirm dim.
-# use 39 as the index of "dummy class"
+# use 48th as the index of "dummy class"
 sys.stderr.write('Processing y_train...\n')
 for i in range(num_sent):
     sent = y_train[i].flatten().tolist()
-    labels = [phone_index[mapping[l]] for l in sent]
+    labels = [phone_index[l] for l in sent]
     labels = np.array(labels)
     
     padding = np.full(frame_size,dummy_class)
@@ -185,41 +199,45 @@ for i in range(num_sent):
 
 y_train=np.array(y_train)
 
-# y_train should be list of (400,40) with len=3692
-print(y_train.shape)
+# y_train should be list of (400,49) with len=3692
+#print(y_train[0].tolist(), y_train[1].tolist())
+#print(y_train.shape)
 #print(len(y_train))
 
 # Build LSTM models
 sys.stderr.write('Building NN model...\n')
 
-optimizer = RMSprop(clipnorm=1.)
+#optimizer = RMSprop(clipnorm=1.)
+optimizer = Adam(clipnorm=1.)
 batch_size = 32
 
 model = Sequential()
-model.add(Masking(mask_value=0., input_shape=(frame_size, data_dim)))
-model.add(LSTM(128, return_sequences=True,
+model.add(GRU(128, return_sequences=True,
           input_shape=(frame_size, data_dim)))
 model.add(Dropout(0.2))
 
-#model.add(Masking(mask_value=0.))
-#model.add(GRU(64, return_sequences=True))
+#model.add(GRU(64, return_sequences=True,
+#          mask_zero=True)) 
 #model.add(GRU(128))
+model.add(Dropout(0.2))
 model.add(Dense(256, activation='relu'))
-#model.add(Dense(128, activation='relu'))
-model.add(Dropout(0.5))
 model.add(Dense(128, activation='relu'))
+model.add(Dense(128, activation='relu'))
+model.add(Dense(64, activation='relu'))
+model.add(Dense(64, activation='relu'))
 model.add(Dense(64, activation='relu'))
 #model.add(Dense(64, activation='relu'))
 model.add(Dense(num_classes, activation='softmax'))
 model.compile(loss='categorical_crossentropy',
-              optimizer='adam',
+              optimizer=optimizer,
               metrics=['accuracy'])
 model.summary()
+
 try:
     model.fit(x_train, y_train,
               batch_size=batch_size,
               epochs=epochs,
-              validation_split=0.05)
+              validation_split=0.1)
 except:
     model.save(sys.argv[2])
               

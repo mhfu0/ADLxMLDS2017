@@ -56,22 +56,24 @@ with open(data_path+'48phone_char.map','r') as m:
         char_mapping[line[0]]=line[2]
 
 # Create index mappings
-# using 39 phones
 phone_index={}
 index_phone=[]
+'''
+# using 39 phones
 with open('phone_index.map','r') as m:
     for line in m:
         line=line.strip('\n').split('\t')
         phone_index[line[0]]=line[1]
         index_phone.append(line[0])
 '''
+
 # using 48 phones
 with open(data_path+'48phone_char.map','r') as m:
     for line in m:
         line=line.strip('\n').split('\t')
         phone_index[line[0]]=line[1]
         index_phone.append(line[0])
-'''
+
 # Read test data
 sys.stderr.write('Load mfcc/test.ark...\n')
 mfcc_df=pd.read_csv(data_path+'mfcc/test.ark',
@@ -116,12 +118,12 @@ del mfcc_df
 del fbank_df
 
 # Model parameter settings
-frame_size=400      # padding size
+frame_size=400  # padding size
 #batch_size =16
 
-data_dim=69         # take only fbank feature into consideration
-dummy_class=39
-num_classes=39+1    # +1 for dummy class
+data_dim=69  # take only fbank feature into consideration
+dummy_class=len(index_phone)
+num_classes=len(index_phone)+1  # +1 for dummy class
 
 # Pad 0 / Split x_test into timesteps=400
 sys.stderr.write('Processing x_test...\n')
@@ -183,6 +185,7 @@ y_test_split = model.predict_classes(x_test_split,verbose=0)
 y_test_split = np.array(y_test_split)
 #print(y_test_split)
 
+# Merge splitted label sequence
 y_test=[]
 k=0
 for i in range(len(num_split)):
@@ -193,13 +196,13 @@ for i in range(len(num_split)):
         
         k+=1
     y_test.append(tmp)
-print(y_test)
 
 for i, y in enumerate(y_test):
     seq = ''
     for l in y:
         try:
-            seq += char_mapping[index_phone[l]]
+            #seq += char_mapping[mapping[index_phone[l]]]  # 40 classes
+            seq += char_mapping[mapping[index_phone[l]]]  # 49 classes
         except:
             seq += ''
     
