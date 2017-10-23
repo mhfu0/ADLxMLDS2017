@@ -209,7 +209,7 @@ sys.stderr.write('Building NN model...\n')
 
 #optimizer = RMSprop(clipnorm=1.)
 optimizer = Adam(clipnorm=1.)
-batch_size = 32
+batch_size = 64
 
 model = Sequential()
 model.add(GRU(128, return_sequences=True,
