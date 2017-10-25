@@ -121,7 +121,7 @@ del fbank_df
 frame_size=400  # padding size
 #batch_size =16
 
-data_dim=69  # take only fbank feature into consideration
+data_dim=108  # take both features into consideration
 dummy_class=len(index_phone)
 num_classes=len(index_phone)+1  # +1 for dummy class
 

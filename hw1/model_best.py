@@ -13,7 +13,7 @@ config = tf.ConfigProto()
 config.gpu_options.allow_growth=True
 #config.gpu_options.per_process_gpu_memory_fraction=0.333
 config.intra_op_parallelism_threads=1
-config.inter_op_parallelism_threads=4
+config.inter_op_parallelism_threads=2
 
 set_session(tf.Session(config=config))
 
@@ -21,7 +21,10 @@ from keras.models import Sequential
 from keras.layers import Dense, Activation
 from keras.layers import Dropout, Reshape, Masking
 from keras.layers import SimpleRNN, LSTM, GRU
-from keras.layers.wrappers import TimeDistributed
+from keras.layers import Conv1D
+from keras.layers.wrappers import TimeDistributed, Bidirectional
+from keras.layers.advanced_activations import LeakyReLU, PReLU
+from keras.layers.normalization import BatchNormalization
 
 from keras import initializers
 from keras.utils import np_utils
@@ -163,9 +166,14 @@ num_sent = len(x_train)
 frame_size=400    # padding size
 epochs=2000
 
-data_dim=69         # take only fbank feature into consideration
+data_dim=108        # take both features into consideration
 dummy_class=48
 num_classes=48+1    # +1 for dummy class
+
+# CNN settings
+num_filters=512
+kernel_size=15
+kernel_size2=7
 
 # Pad 0. / Truncate x_train into timesteps=400
 sys.stderr.write('Processing x_train...\n')
@@ -204,7 +212,7 @@ y_train=np.array(y_train)
 #print(y_train.shape)
 #print(len(y_train))
 
-# Build LSTM models
+# Build models
 sys.stderr.write('Building NN model...\n')
 
 #optimizer = RMSprop(clipnorm=1.)
@@ -212,21 +220,41 @@ optimizer = Adam(clipnorm=1.)
 batch_size = 64
 
 model = Sequential()
-model.add(GRU(128, return_sequences=True,
+model.add(TimeDistributed(Dense(512,activation='relu'),
           input_shape=(frame_size, data_dim)))
+model.add(Dropout(0.3))
+
+model.add(Conv1D(num_filters,
+                 kernel_size,
+                 padding='same',
+                 activation='relu',
+                 strides=1))
+model.add(BatchNormalization())
+model.add(Dense(num_filters, activation='relu'))
+model.add(Dropout(0.3))
+
+model.add(Conv1D(num_filters,
+                 kernel_size2,
+                 padding='same',
+                 activation='relu',
+                 strides=1))
+model.add(BatchNormalization())
+model.add(Dense(num_filters, activation='linear'))
+model.add(LeakyReLU(alpha=.001))
+model.add(Dropout(0.3))
+
+model.add(Bidirectional(GRU(256,
+          return_sequences=True,
+          activation='relu')))
+model.add(Dense(256, activation='linear'))
+model.add(LeakyReLU(alpha=.001))
 model.add(Dropout(0.2))
 
-#model.add(GRU(64, return_sequences=True,
-#          mask_zero=True)) 
-#model.add(GRU(128))
+model.add(Dense(128, activation='relu'))
+model.add(Dense(128, activation='relu'))
 model.add(Dropout(0.2))
-model.add(Dense(256, activation='relu'))
-model.add(Dense(128, activation='relu'))
-model.add(Dense(128, activation='relu'))
 model.add(Dense(64, activation='relu'))
-model.add(Dense(64, activation='relu'))
-model.add(Dense(64, activation='relu'))
-#model.add(Dense(64, activation='relu'))
+model.add(Dense(64, activation='sigmoid'))
 model.add(Dense(num_classes, activation='softmax'))
 model.compile(loss='categorical_crossentropy',
               optimizer=optimizer,
