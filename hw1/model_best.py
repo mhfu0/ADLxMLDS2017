@@ -26,6 +26,7 @@ from keras.layers.wrappers import TimeDistributed, Bidirectional
 from keras.layers.advanced_activations import LeakyReLU, PReLU
 from keras.layers.normalization import BatchNormalization
 from keras.initializers import Orthogonal
+from keras.callbacks import EarlyStopping
 from keras import regularizers
 
 from keras import initializers
@@ -220,11 +221,13 @@ sys.stderr.write('Building NN model...\n')
 #optimizer = RMSprop(clipnorm=1.)
 #optimizer = Adam(clipnorm=1.)
 optimizer = RMSprop()
+early_stopping = EarlyStopping(patience=2,verbose=1)
 batch_size = 64
 
 model = Sequential()
 model.add(TimeDistributed(Dense(512,activation='relu'),
           input_shape=(frame_size, data_dim)))
+model.add(BatchNormalization())
 model.add(Dropout(0.5))
 
 model.add(Conv1D(num_filters,
@@ -234,6 +237,7 @@ model.add(Conv1D(num_filters,
                  strides=1))
 model.add(BatchNormalization())
 model.add(Dense(num_filters, activation='relu'))
+model.add(BatchNormalization())
 model.add(Dropout(0.3))
 
 model.add(Conv1D(num_filters,
@@ -243,6 +247,7 @@ model.add(Conv1D(num_filters,
                  strides=1))
 model.add(BatchNormalization())
 model.add(Dense(num_filters, activation='linear'))
+model.add(BatchNormalization())
 model.add(LeakyReLU(alpha=.001))
 model.add(Dropout(0.3))
 
@@ -250,15 +255,21 @@ model.add(Bidirectional(GRU(256,
           return_sequences=True,
           activation='relu')))
 #kernel_regularizer=regularizers.l2(0.01)
+model.add(BatchNormalization())
 model.add(Dense(256, activation='linear'))
+model.add(BatchNormalization())
 model.add(LeakyReLU(alpha=.001))
 model.add(Dropout(0.3))
 
 model.add(Dense(128, activation='relu'))
+model.add(BatchNormalization())
 model.add(Dense(128, activation='relu'))
+model.add(BatchNormalization())
 model.add(Dropout(0.2))
 model.add(Dense(64, activation='relu'))
+model.add(BatchNormalization())
 model.add(Dense(64, activation='sigmoid'))
+model.add(BatchNormalization())
 model.add(Dense(num_classes, activation='softmax'))
 model.compile(loss='categorical_crossentropy',
               optimizer=optimizer,
@@ -269,6 +280,7 @@ try:
     model.fit(x_train, y_train,
               batch_size=batch_size,
               epochs=epochs,
+              #callbacks=[early_stopping],
               validation_split=0.1)
 except:
     model.save(sys.argv[2])
