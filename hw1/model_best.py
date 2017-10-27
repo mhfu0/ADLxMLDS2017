@@ -25,6 +25,8 @@ from keras.layers import Conv1D
 from keras.layers.wrappers import TimeDistributed, Bidirectional
 from keras.layers.advanced_activations import LeakyReLU, PReLU
 from keras.layers.normalization import BatchNormalization
+from keras.initializers import Orthogonal
+from keras import regularizers
 
 from keras import initializers
 from keras.utils import np_utils
@@ -172,8 +174,8 @@ num_classes=48+1    # +1 for dummy class
 
 # CNN settings
 num_filters=512
-kernel_size=15
-kernel_size2=7
+kernel_size=9
+kernel_size2=9
 
 # Pad 0. / Truncate x_train into timesteps=400
 sys.stderr.write('Processing x_train...\n')
@@ -216,13 +218,14 @@ y_train=np.array(y_train)
 sys.stderr.write('Building NN model...\n')
 
 #optimizer = RMSprop(clipnorm=1.)
-optimizer = Adam(clipnorm=1.)
+#optimizer = Adam(clipnorm=1.)
+optimizer = RMSprop()
 batch_size = 64
 
 model = Sequential()
 model.add(TimeDistributed(Dense(512,activation='relu'),
           input_shape=(frame_size, data_dim)))
-model.add(Dropout(0.3))
+model.add(Dropout(0.5))
 
 model.add(Conv1D(num_filters,
                  kernel_size,
@@ -246,9 +249,10 @@ model.add(Dropout(0.3))
 model.add(Bidirectional(GRU(256,
           return_sequences=True,
           activation='relu')))
+#kernel_regularizer=regularizers.l2(0.01)
 model.add(Dense(256, activation='linear'))
 model.add(LeakyReLU(alpha=.001))
-model.add(Dropout(0.2))
+model.add(Dropout(0.3))
 
 model.add(Dense(128, activation='relu'))
 model.add(Dense(128, activation='relu'))
