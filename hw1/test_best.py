@@ -34,7 +34,7 @@ from keras.models import load_model
 
 # For reproducibilty
 np.random.seed(7)
-tf.set_random_seed(7)
+#tf.set_random_seed(7)
 import os, random
 os.environ['PYTHONHASHSEED'] = '0'
 random.seed(7)
