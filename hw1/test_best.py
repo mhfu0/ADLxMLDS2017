@@ -7,6 +7,7 @@ import sys
 import pickle
 import itertools
 
+'''
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 
@@ -17,6 +18,7 @@ config.intra_op_parallelism_threads=1
 config.inter_op_parallelism_threads=1
 
 set_session(tf.Session(config=config))
+'''
 
 from keras.models import Sequential
 from keras.layers import Dense, Activation
@@ -144,38 +146,10 @@ for i in range(num_sent):
         x_test_split.append(split)
 
 x_test_split=np.array(x_test_split)
-#print(x_test_split)
-#print(x_test_split.shape)
-
-'''
-# Pad the sequence by zero to proceed sliding window
-sys.stderr.write('Paddind zeros...\n')
-x_test_r=[]
-for i in range(len(x_test)):
-    x_test[i] = x_test[i].astype(np.float32)
-    for p in range(padding_size):
-        x_test[i] = np.insert(x_test[i],0,0.0,axis=0)
-        #x_test[i] = np.insert(x_test[i],x_test[i].shape[0],0.0,axis=0)
-        
-    # Reshape data by sliding window (shape=(timesteps,data_dim))
-    # Expect x_test.shape=(num_data, timesteps, data_dim)
-    
-    r=[]  # reshaped x_train
-    sent = x_test[i]
-    #num_windows=sent.shape[0]-2*padding_size
-    num_windows=sent.shape[0]-padding_size
-    for i in range(num_windows):
-        window=sent[i:i+timesteps,:]
-        r.append(window)
-        
-    x_test_r.append(np.array(r))
-'''
-
 
 # Load trained model
 sys.stderr.write('Load trained model...\n')
 model = load_model(sys.argv[2])
-#model.summary()
 
 # Prdiction
 sys.stderr.write('Predicting...\n' )
@@ -183,7 +157,6 @@ print('id,phone_sequence')
 y_test_split = model.predict_classes(x_test_split,verbose=0)
 
 y_test_split = np.array(y_test_split)
-#print(y_test_split)
 
 # Merge splitted label sequence
 y_test=[]

@@ -167,7 +167,7 @@ num_sent = len(x_train)
 
 # Model parameter settings
 frame_size=400    # padding size
-epochs=2000
+epochs=300
 
 data_dim=108        # take both features into consideration
 dummy_class=48
@@ -190,10 +190,6 @@ for i in range(num_sent):
 
 # x_train.shape should be (3696,400,69)
 x_train=np.array(x_train)
-#print(x_train.shape)
-
-#print(x_train[0], x_train[1])
-#print(len(x_train), len(y_train))
 
 # Pad / Truncate y_train to confirm dim.
 # use 48th as the index of "dummy class"
@@ -225,11 +221,9 @@ early_stopping = EarlyStopping(patience=2,verbose=1)
 batch_size = 64
 
 model = Sequential()
-model.add(TimeDistributed(Dense(512,activation='relu'),
-          input_shape=(frame_size, data_dim)))
+model.add(TimeDistributed(Dense(512,activation='relu'),input_shape=(frame_size, data_dim)))
 model.add(BatchNormalization())
 model.add(Dropout(0.5))
-
 model.add(Conv1D(num_filters,
                  kernel_size,
                  padding='same',
@@ -250,11 +244,9 @@ model.add(Dense(num_filters, activation='linear'))
 model.add(BatchNormalization())
 model.add(LeakyReLU(alpha=.001))
 model.add(Dropout(0.3))
-
 model.add(Bidirectional(GRU(256,
           return_sequences=True,
           activation='relu')))
-#kernel_regularizer=regularizers.l2(0.01)
 model.add(BatchNormalization())
 model.add(Dense(256, activation='linear'))
 model.add(BatchNormalization())
@@ -286,69 +278,3 @@ except:
     model.save(sys.argv[2])
               
 model.save(sys.argv[2])
-'''
-# Pad the sequence by zero to proceed sliding window
-sys.stderr.write('Paddind zeros...\n')
-for i in range(len(x_train)):
-    x_train[i] = x_train[i].astype(np.float32)
-    for p in range(padding_size):
-        x_train[i] = np.insert(x_train[i],0,0.0,axis=0)
-        #x_train[i] = np.insert(x_train[i],x_train[i].shape[0],0.0,axis=0)
-
-# Reshape data by sliding window (shape=(timesteps,data_dim))
-# Expect x_train_r.shape=(num_data, timesteps, data_dim)
-sys.stderr.write('Reshaping x_train...\n')
-x_train_r=[]  # reshaped x_train
-for sent in x_train:
-    #num_windows=sent.shape[0]-2*padding_size
-    num_windows=sent.shape[0]-padding_size
-    for i in range(num_windows):
-        window=sent[i:i+timesteps,:]
-        x_train_r.append(window)
-    
-x_train_r=np.array(x_train_r)
-
-# Expect y_train_r.shape=(num_data, num_classes)
-# Map phone labels to int (Should have done in DataFrame structure...)
-sys.stderr.write('Reshaping y_train...\n')
-y_train_r=[]
-for sent in y_train:
-    sent = sent.flatten().tolist()
-    for i in range(len(sent)):
-        y_train_r.append(phone_index[mapping[sent[i]]])
-
-y_train_r=np.array(y_train_r)
-y_train_r=np_utils.to_categorical(y_train_r)
-
-print(x_train_r.shape, y_train_r.shape)
-print(x_train_r[:10,:10,:].tolist())
-print(y_train_r[:10,:].tolist())
-
-# Build LSTM models
-sys.stderr.write('Building LSTM model...\n')
-model = Sequential()
-model.add(SimpleRNN(512, return_sequences=True,
-          input_shape=(timesteps, data_dim)))
-model.add(Dropout(0.2))
-model.add(SimpleRNN(256, return_sequences=True)) 
-model.add(GRU(128))
-model.add(Dropout(0.2))
-model.add(Dense(128, activation='relu'))
-model.add(Dense(64, activation='relu'))
-model.add(Dense(num_classes, activation='softmax'))
-model.compile(loss='categorical_crossentropy',
-              optimizer=optimizer,
-              metrics=['accuracy'])
-model.summary()
-
-model.fit(x_train_r[:200000,:,:], y_train_r[:200000,:],
-          batch_size=batch_size,
-          epochs=epochs,
-          validation_split=0.5)
-          
-model.save(sys.argv[2])
-
-loss, accuracy = model.evaluate(x_train_r[900000:,:,:],y_train_r[900000:,:],
-                            batch_size=batch_size)                     
-sys.stderr.write('End training with loss=%f and accuracy=%f\n' % (loss,accuracy))
-'''
