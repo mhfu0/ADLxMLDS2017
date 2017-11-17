@@ -249,12 +249,12 @@ if TRAIN:
                         #batch_size=32,
                         epochs=10)
     
-    model.save('model_.h5')
+    model.save('model.h5')
 
 else:
     # Load testing data
-    test_feat_dir_path=data_dir_path+'testing_data/feat/'
-    test_label_path=data_dir_path+'testing_label.json'
+    test_feat_dir_path=os.path.join(data_dir_path, 'testing_data/feat/')
+    test_label_path=os.path.join(data_dir_path, 'testing_label.json')
     test_idx, test_feats, test_labels = load_data(test_feat_dir_path, test_label_path)
     test_data_size = test_feats.shape[0]
     
@@ -266,7 +266,7 @@ else:
     num_classes = dict_data[2]
     
     # Load seq2seq model
-    model = load_model('model/model.h5')
+    model = load_model('./model.h5')
     max_cap_len = model.input_shape[1][1]
     
     cap_list = []
@@ -284,19 +284,12 @@ else:
             cap_word_list.append(id2word[cap[i+1]])
         sent = ' '.join(cap_word_list)
         cap_list.append(sent)
-        print(sent)
+        #print(sent)
     
     id2cap = {}
     for pair in zip(test_idx, cap_list):
         #id2cap[pair[0]] = pair[1]
         arraged_cap = pair[1]
-        '''
-        arraged_cap = pair[1].replace('the ', 'a the ', 1)
-        arraged_cap = arraged_cap.replace('someone', 'a man', 1)
-        arraged_cap = arraged_cap.replace('person', 'man', 1)
-        arraged_cap = arraged_cap.replace('are ', 'is ', 1)
-        arraged_cap = arraged_cap.replace('little ', '', 1)
-        '''
         id2cap[pair[0]] = arraged_cap
     
     test_id_path = os.path.join(data_dir_path, 'testing_id.txt')
@@ -306,3 +299,41 @@ else:
         for line in id_f:
             idx = line.strip('\n')
             f.write('%s,%s\n' % (idx, id2cap[idx].capitalize()))
+    
+    # Peer review
+    peer_feat_dir_path=os.path.join(data_dir_path, 'peer_review/feat/')
+    #peer_label_path=os.path.join(data_dir_path, 'testing_label.json')
+    peer_idx, peer_feats, _ = load_data(peer_feat_dir_path, test_label_path)
+    peer_data_size = peer_feats.shape[0]
+    
+    cap_list = []
+    for k in range(peer_data_size):
+        feat = peer_feats[k:k+1]
+        cap = np.zeros((max_cap_len),dtype='int')
+        cap[0] = word2id['<bos>']
+        cap_word_list = []
+        for i in range(max_cap_len-1):
+            cap_o = np_utils.to_categorical(cap, num_classes=num_classes)
+            cap_o = cap_o.reshape(1,max_cap_len,num_classes)
+            cap[i+1]=np.argmax(model.predict([feat,cap_o]))
+            if cap[i+1] == word2id['<eos>']:
+                break
+            cap_word_list.append(id2word[cap[i+1]])
+        sent = ' '.join(cap_word_list)
+        cap_list.append(sent)
+        #print(sent)
+    
+    id2cap = {}
+    for pair in zip(peer_idx, cap_list):
+        #id2cap[pair[0]] = pair[1]
+        arraged_cap = pair[1]
+        id2cap[pair[0]] = arraged_cap
+    
+    peer_id_path = os.path.join(data_dir_path, 'peer_review_id.txt')
+    output_path = sys.argv[3]
+    
+    with open(peer_id_path, 'r') as id_f, open(output_path, 'w') as f:
+        for line in id_f:
+            idx = line.strip('\n')
+            f.write('%s,%s\n' % (idx, id2cap[idx].capitalize()))
+    
