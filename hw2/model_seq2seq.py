@@ -11,9 +11,9 @@ import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 
 config = tf.ConfigProto()
-config.gpu_options.allow_growth=True
-config.intra_op_parallelism_threads=1
-config.inter_op_parallelism_threads=2
+#config.gpu_options.allow_growth=True
+#config.intra_op_parallelism_threads=1
+#config.inter_op_parallelism_threads=2
 #config.gpu_options.per_process_gpu_memory_fraction=0.333
 tf.set_random_seed(7)
 set_session(tf.Session(config=config))
@@ -67,7 +67,8 @@ def extract_label(raw_labels):
     return labels
 
 def preProBuildWordVocab(sentence_iterator, word_count_threshold=5):
-    # borrowed this function from NeuralTalk
+    # Borrowed this from https://github.com/chenxinpeng/S2VT/blob/master/model_RGB.py
+    # Original source: NeuralTalk
     sys.stderr.write('preprocessing word counts and creating vocab based on word count threshold %d\n' % (word_count_threshold))
     word_counts = collections.OrderedDict()
     nsents = 0
@@ -108,6 +109,7 @@ def preProBuildWordVocab(sentence_iterator, word_count_threshold=5):
     return wordtoix, ixtoword, vocab_size, bias_init_vector
 
 def remove_special_chara(labels):
+    # Borrowed this from https://github.com/chenxinpeng/S2VT/blob/master/model_RGB.py
     labels = map(lambda x: x.replace('.', ''), labels)
     labels = map(lambda x: x.replace(',', ''), labels)
     labels = map(lambda x: x.replace('"', ''), labels)
@@ -217,6 +219,7 @@ if TRAIN:
             for text in padded_sents:
                 feat_counter+=1
                 current_feat = feats[feat_counter]
+                
                 #for i in range(max_cap_len-1):
                 for i in range(list(text).index(0.)):
                     total_count+=1
@@ -224,8 +227,6 @@ if TRAIN:
                     partial[:i+1] = text[:i+1]
                     partial_onehot = np_utils.to_categorical(partial, num_classes=num_classes)  # one-hot
                     partial_caps.append(partial_onehot)
-                    #next = np.zeros(self.vocab_size)
-                    #next[self.word_index[text.split()[i+1]]] = 1
                     next = np_utils.to_categorical(text[i+1], num_classes=num_classes)  # one-hot
                     next = np.squeeze(next)
                     next_words.append(next)
@@ -235,7 +236,6 @@ if TRAIN:
                         next_words = np.asarray(next_words)
                         feat_tile = np.asarray(feat_tile)
                         partial_caps = np.asarray(partial_caps)
-                        #partial_caps = sequence.pad_sequences(partial_caps, maxlen=self.max_cap_len, padding='post')
                         total_count = 0
                         gen_count+=1
                         #print("yielding count: "+str(gen_count))
@@ -246,7 +246,6 @@ if TRAIN:
     
     model.fit_generator(data_generator(feats, padded_sents),
                         steps_per_epoch=(data_size*max_cap_len)//32,
-                        #batch_size=32,
                         epochs=10)
     
     model.save('model.h5')
@@ -284,7 +283,6 @@ else:
             cap_word_list.append(id2word[cap[i+1]])
         sent = ' '.join(cap_word_list)
         cap_list.append(sent)
-        #print(sent)
     
     id2cap = {}
     for pair in zip(test_idx, cap_list):
