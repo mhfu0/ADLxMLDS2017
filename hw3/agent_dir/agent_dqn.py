@@ -34,7 +34,6 @@ class Agent_DQN(Agent):
         config = tf.ConfigProto()
         config.gpu_options.allow_growth=True
         
-        
         # Parameter initialization
         self.env = env
         self.args = args
@@ -47,6 +46,8 @@ class Agent_DQN(Agent):
         self.train_skip = args.skip
         self.gamma = args.gamma
         print('settings =', self.replay_size, self.update_time, self.train_skip, self.gamma)
+        
+        self.double_dqn = args.double_dqn
         
         self.time_step = 0
         self.epsilon = INITIAL_EPSILON
@@ -71,6 +72,7 @@ class Agent_DQN(Agent):
         self.stateInputT,self.QValueT,self.W_conv1T,self.b_conv1T,self.W_conv2T,self.b_conv2T,self.W_fc1T,self.b_fc1T,self.W_fc2T,self.b_fc2T = self.createQNetwork()
         self.copyTargetQNetworkOperation = [self.W_conv1T.assign(self.W_conv1),self.b_conv1T.assign(self.b_conv1),self.W_conv2T.assign(self.W_conv2),self.b_conv2T.assign(self.b_conv2),self.W_fc1T.assign(self.W_fc1),self.b_fc1T.assign(self.b_fc1),self.W_fc2T.assign(self.W_fc2),self.b_fc2T.assign(self.b_fc2)]
         '''
+        print('Model bulit...')
         
         self.actionInput = tf.placeholder("float",[None,self.actions])
         self.yInput = tf.placeholder("float", [None]) 
@@ -79,14 +81,17 @@ class Agent_DQN(Agent):
         self.optimizer = tf.train.RMSPropOptimizer(0.00025,0.99,0.0,1e-6).minimize(self.cost)
         
         self.saver = tf.train.Saver()
-        print('Model bulit...')
+        if self.double_dqn:
+            self.model_path='double_dqn_networks_%d_%d_%d_%.2f/' % (self.replay_size, self.update_time, self.train_skip, self.gamma)
+        else:
+            self.model_path='dqn_networks_%d_%d_%d_%.2f/' % (self.replay_size, self.update_time, self.train_skip, self.gamma)
+        print('self.model_path =', self.model_path)
         
         if args.test_dqn:
             #you can load your model here
             print('Loading model parameters...')
-            
             self.sess = tf.InteractiveSession(config=config)
-            model_file=tf.train.latest_checkpoint('dqn_networks_%d_%d_%d_%.2f/' % (self.replay_size, self.update_time, self.train_skip, self.gamma))
+            model_file=tf.train.latest_checkpoint(self.model_path)
             self.saver.restore(self.sess, model_file)
             print("Model restored...")
                 
@@ -102,9 +107,6 @@ class Agent_DQN(Agent):
         Put anything you want to initialize if necessary
 
         """
-        ##################
-        # YOUR CODE HERE #
-        ##################
         pass
 
     def train(self):
@@ -156,30 +158,50 @@ class Agent_DQN(Agent):
         nextState_batch = [data[3] for data in minibatch]
         
         # Step 2: calculate y
-        y_batch = []
-        QValue_batch = self.QValueT.eval(feed_dict={self.stateInputT:nextState_batch})
-        for i in range(BATCH_SIZE):
-            done = minibatch[i][4]
-            if done:
-                y_batch.append(reward_batch[i])
-            else:
-                y_batch.append(reward_batch[i] + self.gamma * np.max(QValue_batch[i]))
-                
-        self.optimizer.run(feed_dict={self.yInput:y_batch,self.actionInput:action_batch,self.stateInput:state_batch})
+        if self.double_dqn:
+            # Double DQN
+            y_batch = []
+            QValue_batch = self.QValue.eval(feed_dict={self.stateInput:nextState_batch})
+            QValueT_batch = self.QValueT.eval(feed_dict={self.stateInputT:nextState_batch})
+
+            for i in range(BATCH_SIZE):
+                done = minibatch[i][4]
+                if done:
+                    y_batch.append(reward_batch[i])
+                else:
+                    argmax_a = np.argmax(QValue_batch, axis=1)[i]
+                    y_batch.append(reward_batch[i] + self.gamma * QValueT_batch[i][argmax_a])
+
+            self.optimizer.run(feed_dict={self.yInput:y_batch,self.actionInput:action_batch,self.stateInput:state_batch})
+            if self.time_step % 100 == 0:
+                self.cost_history.append(self.cost.eval(feed_dict={self.yInput:y_batch,self.actionInput:action_batch,self.stateInput:state_batch}))
+            
+        else:
+            # Natural DQN
+            y_batch = []
+            QValue_batch = self.QValueT.eval(feed_dict={self.stateInputT:nextState_batch})
+            for i in range(BATCH_SIZE):
+                done = minibatch[i][4]
+                if done:
+                    y_batch.append(reward_batch[i])
+                else:
+                    y_batch.append(reward_batch[i] + self.gamma * np.max(QValue_batch[i]))
+
+            self.optimizer.run(feed_dict={self.yInput:y_batch,self.actionInput:action_batch,self.stateInput:state_batch})
         
         # Saving parameters / records
         if self.time_step % 100 == 0:
             self.cost_history.append(self.cost.eval(feed_dict={self.yInput:y_batch,self.actionInput:action_batch,self.stateInput:state_batch}))
         
         if self.time_step % self.update_time == 0 and self.time_step > OBSERVE:
-            self.saver.save(self.sess, 'dqn_networks_%d_%d_%d_%.2f/network-dqn' % (self.replay_size, self.update_time, self.train_skip, self.gamma), global_step=self.time_step)
+            self.saver.save(self.sess, self.model_path + 'network-dqn', global_step=self.time_step)
             print('Parameters saved..., time_step =', self.time_step)
-            with open('cost_history_%d_%d_%d_%.2f.pickle' % (self.replay_size, self.update_time, self.train_skip, self.gamma), 'wb') as f:
+            with open(self.model_path+'cost_history.pickle', 'wb') as f:
                 pickle.dump(self.cost_history, f)
-                print('Cost history saved in cost_history_%d_%d_%d_%.2f.pickle' % (self.replay_size, self.update_time, self.train_skip, self.gamma))
-            with open('reward_history_%d_%d_%d_%.2f.pickle' % (self.replay_size, self.update_time, self.train_skip, self.gamma), 'wb') as f:
+                print('Cost history saved...')
+            with open(self.model_path+'reward_history.pickle', 'wb') as f:
                 pickle.dump(self.reward_history, f)
-                print('Reward history saved in reward_history_%d_%d_%d_%.2f.pickle' % (self.replay_size, self.update_time, self.train_skip, self.gamma))
+                print('Reward history saved...')
             
         if self.time_step % self.update_time == 0 and self.time_step > OBSERVE:
             self.copyTargetQNetwork()

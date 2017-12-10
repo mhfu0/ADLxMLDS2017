@@ -10,9 +10,8 @@ def add_arguments(parser):
     parser.add_argument('--replay_size', type=int, default=100000, help='replay memory size')
     parser.add_argument('--update_time', type=int, default=3000, help='update time for training')
     parser.add_argument('--skip', type=int, default=3, help='timestep to skip for training')
-    parser.add_argument('--gamma', type=float, default=.99, help='gamma value for DQN')
+    parser.add_argument('--gamma', type=float, default=.99, help='gamma value for training')
     
-    parser.add_argument('--discount_factor', type=float, default=.99, help='discount factor for PG')
-    
+    parser.add_argument('--double_dqn', action='store_true', help='whether use double DQN')
     
     return parser
