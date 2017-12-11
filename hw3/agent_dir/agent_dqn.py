@@ -48,6 +48,8 @@ class Agent_DQN(Agent):
         print('settings =', self.replay_size, self.update_time, self.train_skip, self.gamma)
         
         self.double_dqn = args.double_dqn
+        self.dueling_dqn = args.dueling_dqn
+        assert(not (self.double_dqn and self.dueling_dqn))
         
         self.time_step = 0
         self.epsilon = INITIAL_EPSILON
@@ -61,17 +63,24 @@ class Agent_DQN(Agent):
         self.reward_memory = deque(maxlen=30)
         self.reward_history = []
 
-        # build more complicated DQN
-        self.stateInput,self.QValue,self.W_conv1,self.b_conv1,self.W_conv2,self.b_conv2,self.W_conv3,self.b_conv3,self.W_fc1,self.b_fc1,self.W_fc2,self.b_fc2 = self.createQNetwork_complex()
-        self.stateInputT,self.QValueT,self.W_conv1T,self.b_conv1T,self.W_conv2T,self.b_conv2T,self.W_conv3T,self.b_conv3T,self.W_fc1T,self.b_fc1T,self.W_fc2T,self.b_fc2T = self.createQNetwork_complex()
-        self.copyTargetQNetworkOperation = [self.W_conv1T.assign(self.W_conv1),self.b_conv1T.assign(self.b_conv1),self.W_conv2T.assign(self.W_conv2),self.b_conv2T.assign(self.b_conv2),self.W_conv3T.assign(self.W_conv3),self.b_conv3T.assign(self.b_conv3),self.W_fc1T.assign(self.W_fc1),self.b_fc1T.assign(self.b_fc1),self.W_fc2T.assign(self.W_fc2),self.b_fc2T.assign(self.b_fc2)]
+        if not self.dueling_dqn:
+            # build more complicated DQN
+            self.stateInput,self.QValue,self.W_conv1,self.b_conv1,self.W_conv2,self.b_conv2,self.W_conv3,self.b_conv3,self.W_fc1,self.b_fc1,self.W_fc2,self.b_fc2 = self.createQNetwork_complex()
+            self.stateInputT,self.QValueT,self.W_conv1T,self.b_conv1T,self.W_conv2T,self.b_conv2T,self.W_conv3T,self.b_conv3T,self.W_fc1T,self.b_fc1T,self.W_fc2T,self.b_fc2T = self.createQNetwork_complex()
+            self.copyTargetQNetworkOperation = [self.W_conv1T.assign(self.W_conv1),self.b_conv1T.assign(self.b_conv1),self.W_conv2T.assign(self.W_conv2),self.b_conv2T.assign(self.b_conv2),self.W_conv3T.assign(self.W_conv3),self.b_conv3T.assign(self.b_conv3),self.W_fc1T.assign(self.W_fc1),self.b_fc1T.assign(self.b_fc1),self.W_fc2T.assign(self.W_fc2),self.b_fc2T.assign(self.b_fc2)]
+
+            # build DQN (eval and target)
+            '''
+            self.stateInput,self.QValue,self.W_conv1,self.b_conv1,self.W_conv2,self.b_conv2,self.W_fc1,self.b_fc1,self.W_fc2,self.b_fc2 = self.createQNetwork()
+            self.stateInputT,self.QValueT,self.W_conv1T,self.b_conv1T,self.W_conv2T,self.b_conv2T,self.W_fc1T,self.b_fc1T,self.W_fc2T,self.b_fc2T = self.createQNetwork()
+            self.copyTargetQNetworkOperation = [self.W_conv1T.assign(self.W_conv1),self.b_conv1T.assign(self.b_conv1),self.W_conv2T.assign(self.W_conv2),self.b_conv2T.assign(self.b_conv2),self.W_fc1T.assign(self.W_fc1),self.b_fc1T.assign(self.b_fc1),self.W_fc2T.assign(self.W_fc2),self.b_fc2T.assign(self.b_fc2)]
+            '''
+        else:
+            # Bulid dueling DQN
+            self.stateInput, self.QValue, self.W_conv1, self.b_conv1, self.W_conv2, self.b_conv2, self.W_conv3, self.b_conv3, self.W_fc1, self.b_fc1, self.W_fc2_V, self.b_fc2_V, self.W_fc2_A, self.b_fc2_A = self.createQNetwork_dueling()
+            self.stateInputT, self.QValueT, self.W_conv1T, self.b_conv1T, self.W_conv2T, self.b_conv2T, self.W_conv3T, self.b_conv3T, self.W_fc1T, self.b_fc1T, self.W_fc2_VT, self.b_fc2_VT, self.W_fc2_AT, self.b_fc2_AT = self.createQNetwork_dueling()
+            self.copyTargetQNetworkOperation = [self.W_conv1T.assign(self.W_conv1), self.b_conv1T.assign(self.b_conv1), self.W_conv2T.assign(self.W_conv2), self.b_conv2T.assign(self.b_conv2), self.W_conv3T.assign(self.W_conv3), self.b_conv3T.assign(self.b_conv3), self.W_fc1T.assign(self.W_fc1), self.b_fc1T.assign(self.b_fc1), self.W_fc2_VT.assign(self.W_fc2_V), self.b_fc2_VT.assign(self.b_fc2_V), self.W_fc2_AT.assign(self.W_fc2_A), self.b_fc2_AT.assign(self.b_fc2_A)]            
         
-        # build DQN (eval and target)
-        '''
-        self.stateInput,self.QValue,self.W_conv1,self.b_conv1,self.W_conv2,self.b_conv2,self.W_fc1,self.b_fc1,self.W_fc2,self.b_fc2 = self.createQNetwork()
-        self.stateInputT,self.QValueT,self.W_conv1T,self.b_conv1T,self.W_conv2T,self.b_conv2T,self.W_fc1T,self.b_fc1T,self.W_fc2T,self.b_fc2T = self.createQNetwork()
-        self.copyTargetQNetworkOperation = [self.W_conv1T.assign(self.W_conv1),self.b_conv1T.assign(self.b_conv1),self.W_conv2T.assign(self.W_conv2),self.b_conv2T.assign(self.b_conv2),self.W_fc1T.assign(self.W_fc1),self.b_fc1T.assign(self.b_fc1),self.W_fc2T.assign(self.W_fc2),self.b_fc2T.assign(self.b_fc2)]
-        '''
         print('Model bulit...')
         
         self.actionInput = tf.placeholder("float",[None,self.actions])
@@ -83,6 +92,8 @@ class Agent_DQN(Agent):
         self.saver = tf.train.Saver()
         if self.double_dqn:
             self.model_path='double_dqn_networks_%d_%d_%d_%.2f/' % (self.replay_size, self.update_time, self.train_skip, self.gamma)
+        elif self.dueling_dqn:
+            self.model_path='dueling_dqn_networks_%d_%d_%d_%.2f/' % (self.replay_size, self.update_time, self.train_skip, self.gamma)
         else:
             self.model_path='dqn_networks_%d_%d_%d_%.2f/' % (self.replay_size, self.update_time, self.train_skip, self.gamma)
         print('self.model_path =', self.model_path)
@@ -177,7 +188,7 @@ class Agent_DQN(Agent):
                 self.cost_history.append(self.cost.eval(feed_dict={self.yInput:y_batch,self.actionInput:action_batch,self.stateInput:state_batch}))
             
         else:
-            # Natural DQN
+            # Natural DQN or dueling DQN
             y_batch = []
             QValue_batch = self.QValueT.eval(feed_dict={self.stateInputT:nextState_batch})
             for i in range(BATCH_SIZE):
@@ -310,6 +321,46 @@ class Agent_DQN(Agent):
         QValue = tf.matmul(h_fc1,W_fc2) + b_fc2
         
         return stateInput,QValue,W_conv1,b_conv1,W_conv2,b_conv2,W_conv3,b_conv3,W_fc1,b_fc1,W_fc2,b_fc2
+    
+    def createQNetwork_dueling(self):
+        # network weights
+        W_conv1 = self.weight_variable([8,8,4,32])
+        b_conv1 = self.bias_variable([32])
+        
+        W_conv2 = self.weight_variable([4,4,32,64])
+        b_conv2 = self.bias_variable([64])
+        
+        W_conv3 = self.weight_variable([3,3,64,64])
+        b_conv3 = self.bias_variable([64])
+        
+        W_fc1 = self.weight_variable([3136,512])
+        b_fc1 = self.bias_variable([512])
+        
+        W_fc2_V = self.weight_variable([512,1])
+        b_fc2_V = self.bias_variable([1])
+        
+        W_fc2_A = self.weight_variable([512,self.actions])
+        b_fc2_A = self.bias_variable([self.actions])
+        
+        # input layer
+        stateInput = tf.placeholder("float",[None,84,84,4])
+        
+        # hidden layers
+        h_conv1 = tf.nn.relu(self.conv2d(stateInput,W_conv1,4) + b_conv1)
+        h_conv2 = tf.nn.relu(self.conv2d(h_conv1,W_conv2,2) + b_conv2)
+        h_conv3 = tf.nn.relu(self.conv2d(h_conv2,W_conv3,1) + b_conv3)
+        
+        h_conv3_flat = tf.reshape(h_conv3,[-1,3136])
+        h_fc1 = tf.nn.relu(tf.matmul(h_conv3_flat,W_fc1) + b_fc1)
+        
+        # Seperate output of fc2 as fc2_V and fc2_A
+        h_fc2_V = tf.matmul(h_fc1,W_fc2_V) + b_fc2_V
+        h_fc2_A = tf.matmul(h_fc1,W_fc2_A) + b_fc2_A
+        
+        # Q Value layer
+        QValue = h_fc2_V + (h_fc2_A - tf.reduce_mean(h_fc2_A, axis=1, keep_dims=True))
+        
+        return stateInput,QValue,W_conv1,b_conv1,W_conv2,b_conv2,W_conv3,b_conv3,W_fc1,b_fc1,W_fc2_V,b_fc2_V,W_fc2_A,b_fc2_A
     
     def copyTargetQNetwork(self):
         self.sess.run(self.copyTargetQNetworkOperation)

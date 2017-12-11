@@ -13,5 +13,6 @@ def add_arguments(parser):
     parser.add_argument('--gamma', type=float, default=.99, help='gamma value for training')
     
     parser.add_argument('--double_dqn', action='store_true', help='whether use double DQN')
+    parser.add_argument('--dueling_dqn', action='store_true', help='whether use dueling DQN')
     
     return parser
