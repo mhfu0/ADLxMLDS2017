@@ -11,8 +11,8 @@ import pickle
 from agent_dir.agent import Agent
 
 # Hyperparameter settings
-LEARNING_RATE = .0005
-NUM_EPISODES = 50000
+LEARNING_RATE = 1e-4
+NUM_EPISODES = 100000
 MAX_NUM_STEPS = 10000
 BATCH_SIZE = 32
 
@@ -35,7 +35,7 @@ class Agent_PG(Agent):
         config.gpu_options.allow_growth=True
         
         # Parameter settings
-        self.checkpoints_dir = 'pg_network_conv_%.2f/' % (args.gamma)
+        self.checkpoints_dir = 'pg_network_conv_rmsprop_%.2f/' % (args.gamma)
         self.gamma = args.gamma
 
         self.time_step = 0
@@ -47,7 +47,7 @@ class Agent_PG(Agent):
         random.seed(1239)
         np.random.seed(1239)
         tf.set_random_seed(1239)
-        self.env.seed(1239)
+        #self.env.seed(1239)
         
         self.reward_history = []
         
@@ -63,11 +63,14 @@ class Agent_PG(Agent):
         if args.test_pg:
             #you can load your model here
             print('loading trained model')
+            self.checkpoint_file = os.path.join(self.checkpoints_dir,'pg_network-Copy3.ckpt')
             self.load_checkpoint()
 
 
     def init_game_setting(self):
-        pass
+        self.test_last_observation = self.env.reset()
+        self.test_last_observation = self.prepro(self.test_last_observation)
+        np.random.seed(23)
 
     def train(self):
         self.states = []
@@ -152,8 +155,13 @@ class Agent_PG(Agent):
             episode_n += 1
                 
     def make_action(self, observation, test=True):
-        return self.env.get_random_action()
-    
+        observation = self.prepro(observation)
+        observation_delta = observation - self.test_last_observation
+        self.test_last_observation = observation
+        
+        up_prob = self.forward_pass(observation_delta)[0]
+        action = UP_ACTION if np.random.uniform() < up_prob else DOWN_ACTION
+        return action
     
     def create_network(self):
         '''
@@ -206,7 +214,8 @@ class Agent_PG(Agent):
         self.up_probability = tf.layers.dense(h,units=1,activation=tf.sigmoid,
             kernel_initializer=tf.contrib.layers.xavier_initializer())
         self.loss = tf.losses.log_loss(labels=self.sampled_actions,predictions=self.up_probability,weights=self.advantage)
-        optimizer = tf.train.AdamOptimizer(self.learning_rate)
+        #optimizer = tf.train.AdamOptimizer(self.learning_rate)
+        optimizer = tf.train.RMSPropOptimizer(self.learning_rate)
         self.train_op = optimizer.minimize(self.loss)
         
     def train_network(self, states, actions, rewards):
