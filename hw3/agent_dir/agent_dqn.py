@@ -27,11 +27,9 @@ class Agent_DQN(Agent):
         
         super(Agent_DQN,self).__init__(env)
 
-        
         # Configuration for nlg-workstation
         config = tf.ConfigProto()
-        #config.gpu_options.allow_growth=True
-        
+        config.gpu_options.allow_growth=True
         
         # Parameter initialization
         #self.env = env
@@ -132,8 +130,7 @@ class Agent_DQN(Agent):
             print("Model restored...")
          
     def init_game_setting(self):
-        # Nothing to init for DQN testing stage
-        pass
+        random.seed(23)
 
     def train(self):
         for episode in range(NUM_EPISODES):
