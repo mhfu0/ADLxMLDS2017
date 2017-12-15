@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
+import os
 import random
 from collections import deque
 import pickle
@@ -9,43 +10,37 @@ import pickle
 from agent_dir.agent import Agent
 
 # Hyperparameter settings for DQN
-#REPLAY_SIZE = 1000000
-#REPLAY_SIZE =  100000
+REPLAY_SIZE =  100000
 NUM_EPISODES = 50000
 MAX_NUM_STEPS = 10000
-#UPDATE_TIME = 30000
+UPDATE_TIME = 3000
 OBSERVE = 50000 # timesteps to observe before training
-EXPLORE = 1000000 # frames over which to anneal epsilon
+EXPLORE = 1000000 # frames over which epsilon decreases
 BATCH_SIZE = 32
 
 INITIAL_EPSILON = .9
 FINAL_EPSILON = .1
-#GAMMA = .99
+GAMMA = .99
 
 class Agent_DQN(Agent):
     def __init__(self, env, args):
-        """
-        Initialize every things you need here.
-        For example: building your model
-        """
+        
         super(Agent_DQN,self).__init__(env)
 
+        
         # Configuration for nlg-workstation
         config = tf.ConfigProto()
-        config.gpu_options.allow_growth=True
+        #config.gpu_options.allow_growth=True
+        
         
         # Parameter initialization
-        self.env = env
+        #self.env = env
         self.args = args
-        np.random.seed(1239)
-        random.seed(1239)
-        tf.set_random_seed(1239)
-        
+                
         self.replay_size = args.replay_size
         self.update_time = args.update_time
         self.train_skip = args.skip
         self.gamma = args.gamma
-        print('settings =', self.replay_size, self.update_time, self.train_skip, self.gamma)
         
         self.double_dqn = args.double_dqn
         self.dueling_dqn = args.dueling_dqn
@@ -65,65 +60,82 @@ class Agent_DQN(Agent):
 
         if not self.dueling_dqn:
             # build more complicated DQN
-            self.stateInput,self.QValue,self.W_conv1,self.b_conv1,self.W_conv2,self.b_conv2,self.W_conv3,self.b_conv3,self.W_fc1,self.b_fc1,self.W_fc2,self.b_fc2 = self.createQNetwork_complex()
-            self.stateInputT,self.QValueT,self.W_conv1T,self.b_conv1T,self.W_conv2T,self.b_conv2T,self.W_conv3T,self.b_conv3T,self.W_fc1T,self.b_fc1T,self.W_fc2T,self.b_fc2T = self.createQNetwork_complex()
-            self.copyTargetQNetworkOperation = [self.W_conv1T.assign(self.W_conv1),self.b_conv1T.assign(self.b_conv1),self.W_conv2T.assign(self.W_conv2),self.b_conv2T.assign(self.b_conv2),self.W_conv3T.assign(self.W_conv3),self.b_conv3T.assign(self.b_conv3),self.W_fc1T.assign(self.W_fc1),self.b_fc1T.assign(self.b_fc1),self.W_fc2T.assign(self.W_fc2),self.b_fc2T.assign(self.b_fc2)]
+            self.stateInput, self.QValue, \
+            self.W_conv1, self.b_conv1, self.W_conv2, self.b_conv2, self.W_conv3, self.b_conv3, \
+            self.W_fc1, self.b_fc1, self.W_fc2, self.b_fc2 = self.createQNetwork_complex()
+            
+            self.stateInputT, self.QValueT, \
+            self.W_conv1T, self.b_conv1T, self.W_conv2T, self.b_conv2T, self.W_conv3T, self.b_conv3T, \
+            self.W_fc1T, self.b_fc1T, self.W_fc2T, self.b_fc2T = self.createQNetwork_complex()
+            
+            self.copyTargetQNetworkOperation = [self.W_conv1T.assign(self.W_conv1), self.b_conv1T.assign(self.b_conv1), \
+                                                self.W_conv2T.assign(self.W_conv2), self.b_conv2T.assign(self.b_conv2), \
+                                                self.W_conv3T.assign(self.W_conv3), self.b_conv3T.assign(self.b_conv3), \
+                                                self.W_fc1T.assign(self.W_fc1), self.b_fc1T.assign(self.b_fc1), \
+                                                self.W_fc2T.assign(self.W_fc2), self.b_fc2T.assign(self.b_fc2)]
 
             # build DQN (eval and target)
             '''
-            self.stateInput,self.QValue,self.W_conv1,self.b_conv1,self.W_conv2,self.b_conv2,self.W_fc1,self.b_fc1,self.W_fc2,self.b_fc2 = self.createQNetwork()
-            self.stateInputT,self.QValueT,self.W_conv1T,self.b_conv1T,self.W_conv2T,self.b_conv2T,self.W_fc1T,self.b_fc1T,self.W_fc2T,self.b_fc2T = self.createQNetwork()
-            self.copyTargetQNetworkOperation = [self.W_conv1T.assign(self.W_conv1),self.b_conv1T.assign(self.b_conv1),self.W_conv2T.assign(self.W_conv2),self.b_conv2T.assign(self.b_conv2),self.W_fc1T.assign(self.W_fc1),self.b_fc1T.assign(self.b_fc1),self.W_fc2T.assign(self.W_fc2),self.b_fc2T.assign(self.b_fc2)]
+            self.stateInput, self.QValue, self.W_conv1, self.b_conv1, self.W_conv2, self.b_conv2, \
+            self.W_fc1, self.b_fc1, self.W_fc2, self.b_fc2 = self.createQNetwork()
+            
+            self.stateInputT, self.QValueT, self.W_conv1T, self.b_conv1T, self.W_conv2T, self.b_conv2T, \
+            self.W_fc1T, self.b_fc1T, self.W_fc2T, self.b_fc2T = self.createQNetwork()
+            
+            self.copyTargetQNetworkOperation = [self.W_conv1T.assign(self.W_conv1), self.b_conv1T.assign(self.b_conv1), \
+                                                self.W_conv2T.assign(self.W_conv2), self.b_conv2T.assign(self.b_conv2), \
+                                                self.W_fc1T.assign(self.W_fc1), self.b_fc1T.assign(self.b_fc1), \
+                                                self.W_fc2T.assign(self.W_fc2), self.b_fc2T.assign(self.b_fc2)]
             '''
         else:
             # Bulid dueling DQN
-            self.stateInput, self.QValue, self.W_conv1, self.b_conv1, self.W_conv2, self.b_conv2, self.W_conv3, self.b_conv3, self.W_fc1, self.b_fc1, self.W_fc2_V, self.b_fc2_V, self.W_fc2_A, self.b_fc2_A = self.createQNetwork_dueling()
-            self.stateInputT, self.QValueT, self.W_conv1T, self.b_conv1T, self.W_conv2T, self.b_conv2T, self.W_conv3T, self.b_conv3T, self.W_fc1T, self.b_fc1T, self.W_fc2_VT, self.b_fc2_VT, self.W_fc2_AT, self.b_fc2_AT = self.createQNetwork_dueling()
-            self.copyTargetQNetworkOperation = [self.W_conv1T.assign(self.W_conv1), self.b_conv1T.assign(self.b_conv1), self.W_conv2T.assign(self.W_conv2), self.b_conv2T.assign(self.b_conv2), self.W_conv3T.assign(self.W_conv3), self.b_conv3T.assign(self.b_conv3), self.W_fc1T.assign(self.W_fc1), self.b_fc1T.assign(self.b_fc1), self.W_fc2_VT.assign(self.W_fc2_V), self.b_fc2_VT.assign(self.b_fc2_V), self.W_fc2_AT.assign(self.W_fc2_A), self.b_fc2_AT.assign(self.b_fc2_A)]            
+            self.stateInput, self.QValue, \
+            self.W_conv1, self.b_conv1, self.W_conv2, self.b_conv2, self.W_conv3, self.b_conv3, \
+            self.W_fc1, self.b_fc1, self.W_fc2_V, self.b_fc2_V, self.W_fc2_A, self.b_fc2_A = self.createQNetwork_dueling()
+            
+            self.stateInputT, self.QValueT, \
+            self.W_conv1T, self.b_conv1T, self.W_conv2T, self.b_conv2T, self.W_conv3T, self.b_conv3T, \
+            self.W_fc1T, self.b_fc1T, self.W_fc2_VT, self.b_fc2_VT, self.W_fc2_AT, self.b_fc2_AT = self.createQNetwork_dueling()
+            
+            self.copyTargetQNetworkOperation = [self.W_conv1T.assign(self.W_conv1), self.b_conv1T.assign(self.b_conv1), \
+                                                self.W_conv2T.assign(self.W_conv2), self.b_conv2T.assign(self.b_conv2), \
+                                                self.W_conv3T.assign(self.W_conv3), self.b_conv3T.assign(self.b_conv3), \
+                                                self.W_fc1T.assign(self.W_fc1), self.b_fc1T.assign(self.b_fc1), \
+                                                self.W_fc2_VT.assign(self.W_fc2_V), self.b_fc2_VT.assign(self.b_fc2_V), \
+                                                self.W_fc2_AT.assign(self.W_fc2_A), self.b_fc2_AT.assign(self.b_fc2_A)]            
         
-        print('Model bulit...')
+        print('DQN Model bulit...')
         
-        self.actionInput = tf.placeholder("float",[None,self.actions])
-        self.yInput = tf.placeholder("float", [None]) 
+        self.actionInput = tf.placeholder('float', [None,self.actions])
+        self.yInput = tf.placeholder('float', [None]) 
         Q_Action = tf.reduce_sum(tf.multiply(self.QValue, self.actionInput), reduction_indices = 1)
         self.cost = tf.reduce_mean(tf.square(self.yInput - Q_Action))
-        self.optimizer = tf.train.RMSPropOptimizer(0.00025,0.99,0.0,1e-6).minimize(self.cost)
+        self.optimizer = tf.train.RMSPropOptimizer(0.00025, 0.99, 0.0, 1e-6).minimize(self.cost)
         
         self.saver = tf.train.Saver()
         if self.double_dqn:
-            self.model_path='double_dqn_networks_%d_%d_%d_%.2f/' % (self.replay_size, self.update_time, self.train_skip, self.gamma)
+            self.model_path='double_dqn_network/'
         elif self.dueling_dqn:
-            self.model_path='dueling_dqn_networks_%d_%d_%d_%.2f/' % (self.replay_size, self.update_time, self.train_skip, self.gamma)
+            self.model_path='dueling_dqn_network/'
         else:
-            self.model_path='dqn_networks_%d_%d_%d_%.2f/' % (self.replay_size, self.update_time, self.train_skip, self.gamma)
-        print('self.model_path =', self.model_path)
+            self.model_path='dqn_network/'
+        
+        self.sess = tf.InteractiveSession(config=config)
+        self.sess.run(tf.global_variables_initializer())
+        self.cost_history = []
         
         if args.test_dqn:
-            #you can load your model here
             print('Loading model parameters...')
-            self.sess = tf.InteractiveSession(config=config)
-            model_file=tf.train.latest_checkpoint(self.model_path)
-            self.saver.restore(self.sess, model_file)
+            #model_file=tf.train.latest_checkpoint(self.model_path)
+            self.model_file = os.path.join(self.model_path, 'network-dqn-8805000')
+            self.saver.restore(self.sess, self.model_file)
             print("Model restored...")
-                
-        else:
-            self.sess = tf.InteractiveSession(config=config)
-            self.sess.run(tf.global_variables_initializer())
-            self.cost_history = []
          
     def init_game_setting(self):
-        """
-
-        Testing function will call this function at the begining of new game
-        Put anything you want to initialize if necessary
-
-        """
+        # Nothing to init for DQN testing stage
         pass
 
     def train(self):
-        """
-        Implement your training algorithm here
-        """
         for episode in range(NUM_EPISODES):
             state = self.env.reset()
             step_count = 0
@@ -161,14 +173,14 @@ class Agent_DQN(Agent):
     
     def train_Q_network(self):
     
-        # Step 1: obtain random minibatch from replay memory
+        # Step 1: randomly sample minibatch from replay memory
         minibatch = random.sample(self.replay_memory, BATCH_SIZE)
         state_batch = [data[0] for data in minibatch]
         action_batch = [data[1] for data in minibatch]
         reward_batch = [data[2] for data in minibatch]
         nextState_batch = [data[3] for data in minibatch]
         
-        # Step 2: calculate y
+        # Step 2: calculate y (target Q-value)
         if self.double_dqn:
             # Double DQN
             y_batch = []
@@ -183,14 +195,13 @@ class Agent_DQN(Agent):
                     argmax_a = np.argmax(QValue_batch, axis=1)[i]
                     y_batch.append(reward_batch[i] + self.gamma * QValueT_batch[i][argmax_a])
 
-            self.optimizer.run(feed_dict={self.yInput:y_batch,self.actionInput:action_batch,self.stateInput:state_batch})
-            if self.time_step % 100 == 0:
-                self.cost_history.append(self.cost.eval(feed_dict={self.yInput:y_batch,self.actionInput:action_batch,self.stateInput:state_batch}))
-            
+            self.optimizer.run(feed_dict={self.yInput: y_batch, 
+                                          self.actionInput: action_batch,
+                                          self.stateInput: state_batch})
         else:
-            # Natural DQN or dueling DQN
+            # Natural DQN or Dueling DQN
             y_batch = []
-            QValue_batch = self.QValueT.eval(feed_dict={self.stateInputT:nextState_batch})
+            QValue_batch = self.QValueT.eval(feed_dict={self.stateInputT: nextState_batch})
             for i in range(BATCH_SIZE):
                 done = minibatch[i][4]
                 if done:
@@ -198,27 +209,35 @@ class Agent_DQN(Agent):
                 else:
                     y_batch.append(reward_batch[i] + self.gamma * np.max(QValue_batch[i]))
 
-            self.optimizer.run(feed_dict={self.yInput:y_batch,self.actionInput:action_batch,self.stateInput:state_batch})
+            self.optimizer.run(feed_dict={self.yInput: y_batch,
+                                          self.actionInput: action_batch,
+                                          self.stateInput: state_batch})
         
-        # Saving parameters / records
-        if self.time_step % 100 == 0:
-            self.cost_history.append(self.cost.eval(feed_dict={self.yInput:y_batch,self.actionInput:action_batch,self.stateInput:state_batch}))
-        
+        # Saving parameters and records
+        if self.time_step % 300 == 0:
+            # record cost hitsory per 300 steps
+            self.cost_history.append(self.cost.eval(feed_dict={self.yInput: y_batch, 
+                                                               self.actionInput: action_batch,
+                                                               self.stateInput:state_batch}))
+
         if self.time_step % self.update_time == 0 and self.time_step > OBSERVE:
             self.saver.save(self.sess, self.model_path + 'network-dqn', global_step=self.time_step)
             print('Parameters saved..., time_step =', self.time_step)
+            
             with open(self.model_path+'cost_history.pickle', 'wb') as f:
                 pickle.dump(self.cost_history, f)
                 print('Cost history saved...')
+                
             with open(self.model_path+'reward_history.pickle', 'wb') as f:
                 pickle.dump(self.reward_history, f)
                 print('Reward history saved...')
             
         if self.time_step % self.update_time == 0 and self.time_step > OBSERVE:
+            # Copy network parameters to target Q network
             self.copyTargetQNetwork()
             print('Parameters updated..., time_step =', self.time_step)
             print('Current epsilon =', self.epsilon)
-            print('Current loss =', self.cost_history[-1])
+            print('Current cost =', self.cost_history[-1])
             
     def make_action(self, observation, test=True):
         """
@@ -232,10 +251,7 @@ class Agent_DQN(Agent):
             action: int
                 the predicted action from trained model
         """
-        ##################
-        # YOUR CODE HERE #
-        ##################
-        
+        # Estimate Q value
         observation = observation.reshape((1,84,84,4))
         QValue = self.QValue.eval(feed_dict={self.stateInput:observation})[0]
         
@@ -245,9 +261,11 @@ class Agent_DQN(Agent):
         else:
             action = np.argmax(QValue)
         
+        # Randomly select some actions to prevent endless condition
         if test and random.random() < 0.01:
             action = random.randrange(self.actions)
         
+        # epsilon decay
         if self.epsilon > FINAL_EPSILON and self.time_step > OBSERVE:
             self.epsilon -= (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE
             
@@ -270,7 +288,7 @@ class Agent_DQN(Agent):
         b_fc2 = self.bias_variable([self.actions])
         
         # input layer
-        stateInput = tf.placeholder("float",[None,84,84,4])
+        stateInput = tf.placeholder('float',[None,84,84,4])
         
         # hidden layers
         h_conv1 = tf.nn.relu(self.conv2d(stateInput,W_conv1,4) + b_conv1)
@@ -303,7 +321,7 @@ class Agent_DQN(Agent):
         b_fc2 = self.bias_variable([self.actions])
         
         # input layer
-        stateInput = tf.placeholder("float",[None,84,84,4])
+        stateInput = tf.placeholder('float',[None,84,84,4])
         
         # hidden layers
         h_conv1 = tf.nn.relu(self.conv2d(stateInput,W_conv1,4) + b_conv1)
@@ -343,7 +361,7 @@ class Agent_DQN(Agent):
         b_fc2_A = self.bias_variable([self.actions])
         
         # input layer
-        stateInput = tf.placeholder("float",[None,84,84,4])
+        stateInput = tf.placeholder('float',[None,84,84,4])
         
         # hidden layers
         h_conv1 = tf.nn.relu(self.conv2d(stateInput,W_conv1,4) + b_conv1)
@@ -374,4 +392,4 @@ class Agent_DQN(Agent):
         return tf.Variable(initial)
         
     def conv2d(self,x, W, stride):
-        return tf.nn.conv2d(x, W, strides = [1, stride, stride, 1], padding = "VALID")
+        return tf.nn.conv2d(x, W, strides = [1, stride, stride, 1], padding = 'VALID')
