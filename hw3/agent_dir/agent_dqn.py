@@ -125,7 +125,7 @@ class Agent_DQN(Agent):
         if args.test_dqn:
             print('Loading model parameters...')
             #model_file=tf.train.latest_checkpoint(self.model_path)
-            self.model_file = os.path.join(self.model_path, 'network-dqn-8805000')
+            self.model_file = os.path.join(self.model_path, 'network-dqn-8802000')
             self.saver.restore(self.sess, self.model_file)
             print("Model restored...")
          

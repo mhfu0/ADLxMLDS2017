@@ -1,10 +1,8 @@
-# Code borrowed and modified from:
+# Reference of the code:
 # https://github.com/MorvanZhou/Reinforcement-learning-with-tensorflow/blob/master/contents/8_Actor_Critic_Advantage/AC_CartPole.py
 
 import numpy as np
-import pandas as pd
 import tensorflow as tf
-import scipy
 
 import os, sys
 import random

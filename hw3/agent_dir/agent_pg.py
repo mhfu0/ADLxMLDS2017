@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import tensorflow as tf
 import scipy
 
@@ -32,20 +31,18 @@ class Agent_PG(Agent):
         config.gpu_options.allow_growth=True
         
         # Parameter settings
-        self.checkpoints_dir = 'pg_network_conv_rmsprop_0.99/'
+        self.checkpoints_dir = 'pg_network/'
         self.gamma = args.gamma
 
         self.time_step = 0
         self.learning_rate = LEARNING_RATE
         self.state_dim = [80,80,1]
-        #self.actions = env.action_space.n
         self.reward_history = []
         
         # Reproducibility
         random.seed(1239)
         np.random.seed(1239)
         tf.set_random_seed(1239)
-        #self.env.seed(1239)
         
         # Build network
         self.create_network()
@@ -58,7 +55,7 @@ class Agent_PG(Agent):
         
         if args.test_pg:
             print('Loading model parameters...')
-            self.checkpoint_file = os.path.join(self.checkpoints_dir,'pg_network-Copy5.ckpt')
+            self.checkpoint_file = os.path.join(self.checkpoints_dir,'pg_network.ckpt')
             self.load_checkpoint()
 
     def init_game_setting(self):
@@ -72,13 +69,13 @@ class Agent_PG(Agent):
         self.rewards = []
         
         reward_moving_avg = None
-        episode_n = 1
+        episode = 1
         
         while True:
-            print('Starting episode %d...' % episode_n)
-            episode_done = False
+            print('Starting episode %d...' % episode)
+            done = False
             episode_reward_sum = 0
-            round_n = 1
+            n_rounds = 1
             
             last_observation = self.env.reset()
             last_observation = self.prepro(last_observation)
@@ -87,16 +84,16 @@ class Agent_PG(Agent):
             observation = self.prepro(observation)
             n_steps = 1
             
-            while not episode_done:
+            while not done:
                 observation_delta = observation - last_observation
                 last_observation = observation
-                up_probability = self.forward_pass(observation_delta)[0]
+                up_probability = self.predict_action(observation_delta)[0]
                 if np.random.uniform() < up_probability:
                     action = UP_ACTION
                 else:
                     action = DOWN_ACTION
 
-                observation, reward, episode_done, info = self.env.step(action)
+                observation, reward, done, _ = self.env.step(action)
                 observation = self.prepro(observation)
                 episode_reward_sum += reward
                 n_steps += 1
@@ -105,15 +102,15 @@ class Agent_PG(Agent):
                 self.actions.append(action_dict[action])
                 self.rewards.append(reward)
 
-                if reward == -1:
-                    print('Round %d: %d timesteps; lost...' % (round_n, n_steps))
-                elif reward == +1:
-                    print('Round %d: %d timesteps; won!' % (round_n, n_steps))
                 if reward != 0:
-                    round_n += 1
+                    n_rounds += 1
                     n_steps = 0
+                if reward == -1:
+                    print('Round %d: %d timesteps; lost...' % (n_rounds, n_steps))
+                elif reward == +1:
+                    print('Round %d: %d timesteps; won!' % (n_rounds, n_steps))
 
-            print('Episode %d finished after %d rounds' % (episode_n, round_n-1))
+            print('Episode %d finished after %d rounds' % (episode, n_rounds-1))
 
             # exponentially smoothed version of reward
             if reward_moving_avg is None:
@@ -124,6 +121,7 @@ class Agent_PG(Agent):
                 % (episode_reward_sum, reward_moving_avg))
             self.reward_history.append(episode_reward_sum)
             
+            # Discount and normalize rewards
             self.rewards = self.discount_rewards(self.rewards, self.gamma)
             self.rewards -= np.mean(self.rewards)
             self.rewards /= np.std(self.rewards)
@@ -131,20 +129,20 @@ class Agent_PG(Agent):
             self.states, self.actions, self.rewards = [], [], []
             ### Episode ends here ###
             
-            if episode_n % 250 == 0:
+            if episode % 200 == 0:
                 self.save_checkpoint()
                 with open(os.path.join(self.checkpoints_dir, 'pg_reward_history.pickle'), 'wb') as f:
                     pickle.dump(self.reward_history, f)
                 print('Model saved and reward history dumped...')
 
-            episode_n += 1
+            episode += 1
                 
     def make_action(self, observation, test=True):
         observation = self.prepro(observation)
         observation_delta = observation - self.test_last_observation
         self.test_last_observation = observation
         
-        up_prob = self.forward_pass(observation_delta)[0]
+        up_prob = self.predict_action(observation_delta)[0]
         action = UP_ACTION if np.random.uniform() < up_prob else DOWN_ACTION
         return action
     
@@ -205,7 +203,7 @@ class Agent_PG(Agent):
             discounted_rewards[t] = discounted_reward_sum
         return discounted_rewards
     
-    def forward_pass(self, observations):
+    def predict_action(self, observations):
         up_probability = self.sess.run(self.up_probability,
             feed_dict={self.observations: observations[np.newaxis,:]})
         return up_probability
