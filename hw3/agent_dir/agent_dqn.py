@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import tensorflow as tf
 
 import os
@@ -55,6 +54,14 @@ class Agent_DQN(Agent):
         
         self.reward_memory = deque(maxlen=30)
         self.reward_history = []
+
+        if args.test_pg:
+            try:
+                sess = tf.InteractiveSession(config=config)
+                sess.close()
+                tf.reset_default_graph()
+            except:
+                pass
 
         if not self.dueling_dqn:
             # build more complicated DQN
@@ -118,16 +125,18 @@ class Agent_DQN(Agent):
         else:
             self.model_path='dqn_network/'
         
-        self.sess = tf.InteractiveSession(config=config)
-        self.sess.run(tf.global_variables_initializer())
-        self.cost_history = []
-        
         if args.test_dqn:
-            print('Loading model parameters...')
+            print('Loading model parameters...')    
+            self.sess = tf.InteractiveSession(config=config)
+            
             #model_file=tf.train.latest_checkpoint(self.model_path)
             self.model_file = os.path.join(self.model_path, 'network-dqn-8802000')
             self.saver.restore(self.sess, self.model_file)
             print("Model restored...")
+        else:
+            self.sess = tf.InteractiveSession(config=config)
+            self.sess.run(tf.global_variables_initializer())
+            self.cost_history = []
          
     def init_game_setting(self):
         random.seed(23)
