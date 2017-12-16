@@ -1,16 +1,16 @@
-##HW3 Game Playing
-###[有關執行時間的部分]
+HW3: Game Playing
+
+[有關執行時間的部分]
 
 我在本機端跑pg_test時會超過時間限制大概3分鐘，應該是來回對打太多次造成的。
-![pg_test](https://www.csie.ntu.edu.tw/~r06922030/img/pg.png)
-
+https://www.csie.ntu.edu.tw/~r06922030/img/pg.png
 $> time python3 test.py --test_pg
 real    13m34.549s
 user    13m44.280s
 sys     0m36.944s
 
 但和test_dqn執行時間總和不超過20分鐘。
-![pg_test+dqn_test](https://www.csie.ntu.edu.tw/~r06922030/img/pg_dqn.png)
+https://www.csie.ntu.edu.tw/~r06922030/img/pg_dqn.png
 $> time python3 test.py --test_pg --test_dqn
 real    15m31.989s
 user    15m46.020s
