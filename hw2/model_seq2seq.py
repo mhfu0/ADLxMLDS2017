@@ -326,7 +326,9 @@ else:
         #id2cap[pair[0]] = pair[1]
         arraged_cap = pair[1]
         id2cap[pair[0]] = arraged_cap
-    
+   
+    print(id2cap)
+
     peer_id_path = os.path.join(data_dir_path, 'peer_review_id.txt')
     output_path = sys.argv[3]
     

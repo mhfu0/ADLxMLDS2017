@@ -1,3 +1,3 @@
 #!/bin/bash
 
-python3 ./hw2_train_failed.py $1 $2
+python3 ./model_seq2seq.py $1 $2
