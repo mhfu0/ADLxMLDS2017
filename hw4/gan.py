@@ -149,187 +149,124 @@ def shuffle(X, Y):
     return (X[order], Y[order])
 
 ########## NN Settings ##########
+def leaky_relu(x, alpha=0.2):
+    return tf.maximum(tf.minimum(0.0, alpha * x), x)
 
-BATCH_SIZE = 64
-EPOCHS = 100
-
-def LeakyReLU(input, leak=0.2, name='lrelu'):
-    return tf.maximum(input, leak * input)
+def Generator(z, reuse=False):
+    bs = z.get_shape().as_list()[0]
     
-def Conv2d(input, output_dim=64, kernel=5, strides=2, stddev=0.2, name='conv_2d'):
-
-    with tf.variable_scope(name):
-        W = tf.get_variable('Conv2dW', [kernel, kernel, input.get_shape()[-1], output_dim],
-                           #initializer=tf.truncated_normal_initializer(stddev=stddev))
-                           initializer=tf.contrib.layers.xavier_initializer())
-        b = tf.get_variable('Conv2db', [output_dim], initializer=tf.zeros_initializer())
-        
-        return tf.nn.conv2d(input, W, strides=[1, strides, strides, 1], padding='SAME') + b
+    with tf.variable_scope('g_net') as sc:
+        if reuse:
+            sc.reuse_variables()
     
-def Deconv2d(input, output_dim, batch_size, kernel=5, strides=2, stddev=0.2, name='deconv_2d'):
+        # z_y = tf.concat([z, y], axis=1)
+        
+        fc = tc.layers.fully_connected(z, 4*4*256, weights_initializer=tf.random_normal_initializer(stddev=0.02), activation_fn=None)
+        fc = tf.layers.batch_normalization(fc, training=True)
+        fc = tf.reshape(fc, [-1, 4, 4, 256])
+        fc = tf.nn.relu(fc)
+
+        conv1 = tc.layers.convolution2d_transpose(fc, 128, [5, 5], [2, 2], padding='same', weights_initializer=tf.random_normal_initializer(stddev=0.02),activation_fn=None)
+        conv1 = tf.layers.batch_normalization(conv1, training=True)
+        conv1 = tf.nn.relu(conv1)
+
+        conv2 = tc.layers.convolution2d_transpose(conv1, 64, [5, 5], [2, 2], padding='same', weights_initializer=tf.random_normal_initializer(stddev=0.02),activation_fn=None)
+        conv2 = tf.layers.batch_normalization(conv2, training=True)
+        conv2 = tf.nn.relu(conv2)
+
+        conv3 = tc.layers.convolution2d_transpose(conv2, 32, [5, 5], [2, 2], padding='same', weights_initializer=tf.random_normal_initializer(stddev=0.02),activation_fn=None)
+        conv3 = tf.layers.batch_normalization(conv3, training=True)
+        conv3 = tf.nn.relu(conv3)
+        
+        conv4 = tc.layers.convolution2d_transpose(conv3, 3, [5, 5], [2, 2], padding='same', weights_initializer=tf.random_normal_initializer(stddev=0.02), activation_fn=None)
+        conv4 = tf.nn.tanh(conv4)
+        
+        return conv4
+
+def Discriminator(x, reuse=False):
+    bs = x.get_shape().as_list()[0]
     
-    with tf.variable_scope(name):
-        W = tf.get_variable('Deconv2dW', [kernel, kernel, output_dim, input.get_shape()[-1]],
-                           #initializer=tf.truncated_normal_initializer(stddev=stddev))
-                           initializer=tf.contrib.layers.xavier_initializer())
-        b = tf.get_variable('Deconv2db', [output_dim], initializer=tf.zeros_initializer())
+    with tf.variable_scope('d_net') as sc:
+        if reuse:
+            sc.reuse_variables()
+        
+        conv1 = tc.layers.convolution2d(x, 32, [5, 5], [2, 2], padding='same', weights_initializer=tf.random_normal_initializer(stddev=0.02), activation_fn=None)
+        conv1 = tf.layers.batch_normalization(conv1, training=True)
+        conv1 = leaky_relu(conv1)
+        conv1 = tc.layers.convolution2d(conv1, 32, [5, 5], [2, 2], padding='same', weights_initializer=tf.random_normal_initializer(stddev=0.02), activation_fn=None)
+        conv1 = tf.layers.batch_normalization(conv1, training=True)
+        conv1 = leaky_relu(conv1)
+        
+        conv2 = tc.layers.convolution2d(conv1, 64, [5, 5], [2, 2], padding='same', weights_initializer=tf.random_normal_initializer(stddev=0.02), activation_fn=None)
+        conv2 = tf.layers.batch_normalization(conv2, training=True)
+        conv2 = leaky_relu(conv2)
+        
+        conv3 = tc.layers.convolution2d(
+                conv2, 128, [5, 5], [2, 2],
+                padding='same',
+                weights_initializer=tf.random_normal_initializer(stddev=0.02),
+                activation_fn=None)
+        conv3 = tf.layers.batch_normalization(conv3, training=True)
+        conv3 = leaky_relu(conv3)
+        print(conv3.get_shape())
+        
+        fc = tc.layers.flatten(conv3)
+        print(fc.get_shape())
+        fc = tc.layers.fully_connected(fc, 64, weights_initializer=tf.random_normal_initializer(stddev=0.02), activation_fn=None)
+        fc = leaky_relu(fc)
+        fc = tf.nn.dropout(fc, 0.3)
+        
+        fc2 = tc.layers.fully_connected(fc, 1, weights_initializer=tf.random_normal_initializer(stddev=0.02), activation_fn=None)
+        
+        return tf.nn.sigmoid(fc2)
 
-        input_shape = input.get_shape().as_list()
-        output_shape = [batch_size, int(input_shape[1] * strides),
-                        int(input_shape[2] * strides), output_dim]
-        deconv = tf.nn.conv2d_transpose(input, W, output_shape=output_shape,
-                                        strides=[1, strides, strides, 1])
-        return deconv + b
-
-def Dense(input, output_dim, stddev=0.02, name='dense'):
-    
-    with tf.variable_scope(name):
-        W = tf.get_variable('DenseW', [input.get_shape()[1], output_dim],
-                           initializer=tf.contrib.layers.xavier_initializer())
-        b = tf.get_variable('Denseb', [output_dim], initializer=tf.zeros_initializer())
-        return tf.matmul(input, W) + b
-
-def BatchNormalization(input, name='bn'):
-    
-    with tf.variable_scope(name):
-    
-        output_dim = input.get_shape()[-1]
-        beta = tf.get_variable('BnBeta', [output_dim], initializer=tf.zeros_initializer())
-        gamma = tf.get_variable('BnGamma', [output_dim], initializer=tf.ones_initializer())
-    
-        if len(input.get_shape()) == 2:
-            mean, var = tf.nn.moments(input, [0])
-        else:
-            mean, var = tf.nn.moments(input, [0, 1, 2])
-        return tf.nn.batch_normalization(input, mean, var, beta, gamma, 1e-5)
-
-
-def Discriminator(X, reuse=True, name='D_net'):
-
-    with tf.variable_scope(name, reuse=reuse):
-        
-        batch_size = X.get_shape().as_list()[0]
-        
-        if len(X.get_shape()) > 2:
-            D_conv1 = Conv2d(X, output_dim=64, name='D_conv1')
-        else:
-            D_reshaped = tf.reshape(X, [-1, 64, 64, 3])
-            D_conv1 = Conv2d(D_reshaped, output_dim=64, name='D_conv1')
-        D_h1 = LeakyReLU(D_conv1) 
-        
-        D_conv2 = Conv2d(D_h1, output_dim=128, name='D_conv2')
-        D_h2 = LeakyReLU(D_conv2) 
-        D_conv3 = Conv2d(D_h2, output_dim=128, name='D_conv3')
-        D_h3 = LeakyReLU(D_conv3) 
-        D_r2 = tc.layers.flatten(D_h3)
-        
-        D_h3 = LeakyReLU(D_r2) 
-        D_h4 = tf.nn.dropout(D_h3, 0.1)
-        D_h5 = Dense(D_h4, output_dim=1, name='D_h5')
-        
-        return tf.nn.sigmoid(D_h5)
-
-        
-def Generator(z, reuse=False, name='G_net'):
-
-    with tf.variable_scope(name, reuse=reuse):
-        
-        batch_size = z.get_shape().as_list()[0]
-        
-        G_1 = Dense(z, output_dim=1024, name='G_1')
-        G_bn1 = BatchNormalization(G_1, name='G_bn1')
-        G_h1 = tf.nn.relu(G_bn1)
-        
-        G_2 = Dense(G_h1, output_dim=4*4*256, name='G_2')
-        G_bn2 = BatchNormalization(G_2, name='G_bn2')        
-        G_h2 = tf.nn.relu(G_bn2)
-        G_r2 = tf.reshape(G_h2, [-1, 4, 4, 256])
-        
-        G_conv3 = Deconv2d(G_r2, output_dim=64, batch_size=BATCH_SIZE, name='G_conv3')
-        G_bn3 = BatchNormalization(G_conv3, name='G_bn3')    
-        G_h3 = tf.nn.relu(G_bn3)
-        print(G_h3.get_shape())  # [8, 8]
-        
-        G_conv4 = Deconv2d(G_h3, output_dim=128, batch_size=BATCH_SIZE, name='G_conv4')
-        G_bn4 = BatchNormalization(G_conv4, name='G_bn4')    
-        G_h4 = tf.nn.relu(G_bn4)
-        print(G_h4.get_shape())  # [16, 16]
-        
-        G_conv5 = Deconv2d(G_h4, output_dim=256, batch_size=BATCH_SIZE, name='G_conv5')
-        G_bn5 = BatchNormalization(G_conv5, name='G_bn5')    
-        G_h5 = tf.nn.relu(G_bn5)
-        print(G_h5.get_shape())  # [32, 32]
-        
-        G_conv6 = Deconv2d(G_h5, output_dim=3, batch_size=BATCH_SIZE, name='G_conv6')
-        G_r6 = tf.reshape(G_conv6, [-1, 64, 64, 3])
-        
-        return tf.nn.sigmoid(G_r6)
-        
-        
-print('Build NN')
-
-X = tf.placeholder(tf.float32, shape=[None, 64, 64, 3])
+x = tf.placeholder(tf.float32, shape=[None, 64, 64, 3])
 z = tf.placeholder(tf.float32, shape=[None, 100])
 
-G = Generator(z, False, 'G_net')
-D_real = Discriminator(X, False, 'D_net')
-D_fake = Discriminator(G, True, 'D_net')
+G = Generator(z, reuse=False)
+D_real = Discriminator(x, reuse=False)
+D_fake = Discriminator(G, reuse=True)
 
-#D_loss = - tf.reduce_mean(tf.log(D_real)) - tf.reduce_mean(
-#                                            tf.log(np.ones_like(D_fake)-D_fake))
-#G_loss = tf.reduce_mean(tf.log(np.ones_like(D_fake) - D_fake))
-D_loss = -tf.reduce_mean(tf.log(D_real) - tf.log(D_fake))
-G_loss = -tf.reduce_mean(tf.log(D_fake))
+#d_loss = -tf.reduce_mean(tf.log(D_real) - tf.log(D_fake))
+#g_loss = -tf.reduce_mean(tf.log(D_fake))
+d_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_real, labels=tf.ones_like(D_real))) + tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_fake, labels=tf.zeros_like(D_fake)))
+g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_fake, labels=tf.ones_like(D_fake)))
 
-LR_D = 1e-5
-LR_G = 2e-5
+LR_D = 2e-4
+LR_G = 2e-4
 
-vars = tf.trainable_variables()
-d_params = [v for v in vars if v.name.startswith('D_net/')]
-g_params = [v for v in vars if v.name.startswith('G_net/')]
+BATCH_SIZE = 64
 
-#d_params = [var for var in tf.global_variables() if 'D_net' in var.name]
-#g_params = [var for var in tf.global_variables() if 'G_net' in var.name]
+d_vars = [var for var in tf.global_variables() if "d_net" in var.name]
+g_vars = [var for var in tf.global_variables() if "g_net" in var.name]
 
-D_solver = tf.train.AdamOptimizer(
-           learning_rate=LR_D, beta1=0.1).minimize(D_loss, var_list=d_params)
-G_solver = tf.train.AdamOptimizer(
-           learning_rate=LR_G, beta1=0.3).minimize(G_loss, var_list=g_params)
+d_updates = tf.train.AdamOptimizer(LR_D, beta1=0.5, beta2=0.9).minimize(d_loss, var_list=d_vars)
+g_updates = tf.train.AdamOptimizer(LR_G, beta1=0.5, beta2=0.9).minimize(g_loss, var_list=g_vars)
 
-# TODO: clip_op = tf.assign(x, tf.clip(x, 0, np.infty))
-
-# Start tf session
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 
-with tf.Session() as sess:
-    
+with tf.Session(config=config) as sess:
     sess.run(tf.global_variables_initializer())
-
-    D_loss_vals = []
-    G_loss_vals = []
-
-    iteration = int(img_data.shape[0] / BATCH_SIZE)
     
-    for e in range(EPOCHS):
-
-        for i in range(iteration):
-            x, _ = sample_batch(img_data, label_data)
+    d_loss_vals = []
+    g_loss_vals = []
+    
+    for ep in range(100):
+        for i in range(500):
+            img, y = sample_batch(img_data, label_data)
             rand = np.random.uniform(0., 1., size=[BATCH_SIZE, 100])
-            _, D_loss_curr = sess.run([D_solver, D_loss], {X: x, z: rand})
-            if i % 4 == 0:
-                rand = np.random.uniform(0., 1., size=[BATCH_SIZE, 100])
-                _, G_loss_curr = sess.run([G_solver, G_loss], {z: rand})
-
-            D_loss_vals.append(D_loss_curr)
-            G_loss_vals.append(G_loss_curr)
-
-            print("\r%d / %d: %e, %e" % (i, iteration, D_loss_curr, G_loss_curr))
-
-        data = sess.run(G, {z: rand})
-        scipy.misc.imsave('result/outfile_%d.jpg' % e, np.squeeze(data[e]))
-        print('save image %d' % e)
+            _, d_loss_curr = sess.run([d_updates, d_loss], {x: img, z: rand})
+            
+            rand = np.random.uniform(0., 1., size=[BATCH_SIZE, 100])
+            _, g_loss_curr = sess.run([g_updates, g_loss], {z: rand})
+            
+            d_loss_vals.append(d_loss_curr)
+            g_loss_vals.append(g_loss_curr)            
+            
+            print("%d / %d: %e, %e" % (i, 500, d_loss_curr, g_loss_curr))
         
-        #plot(data, D_loss_vals, G_loss_vals, e, EPOCHS * iteration)
-
-
+        rand = np.random.uniform(0., 1., size=[BATCH_SIZE, 100])
+        data = sess.run(G, {z: rand})
+        scipy.misc.imsave('result/outfile_%d.jpg' % ep, np.squeeze(data[0]))
+        print('save image at epoch %d' % ep)
