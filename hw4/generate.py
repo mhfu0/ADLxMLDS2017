@@ -39,10 +39,6 @@ eye2index = dict(list(zip(index2eye.values(), index2eye.keys())))
 y_dim = len(hair_colors) + len(eye_colors)  # y_dim = 25
 z_dim = y_dim*4  # z_dim = 100
 
-config = tf.ConfigProto(allow_soft_placement=True)
-config.gpu_options.allow_growth = True
-sess = tf.Session(config = config)
-
 BATCH_SIZE = 64
 dump_dir = 'samples/'
 model_path = 'cdcgan_raw/'
@@ -62,6 +58,10 @@ r_img, r_label = img, label
 f_img = g_net(r_label, z)
 sampler = tf.identity(g_net(r_label, z, reuse=True, train=False), name='sampler') 
 
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+sess = tf.Session(config = config)
+
 sess.run(tf.global_variables_initializer())
 saver = tf.train.Saver(tf.global_variables(), max_to_keep=None)
 
@@ -71,10 +71,10 @@ print('Load model checkpoint')
 
 # create random noise to observe output
 try:
-    rand_t = pickle.load(open('noise.pkl', 'rb'))
+    rand_t = pickle.load(open('fixed.pkl', 'rb'))
 except:
     rand_t = next_noise_batch(5, z_dim)
-    pickle.dump(rand_t, open('noise.pkl', 'wb'))
+    pickle.dump(rand_t, open('fixed.pkl', 'wb'))
     
 with open(sys.argv[1], 'r') as f:
     for line in f:
