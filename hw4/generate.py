@@ -41,7 +41,7 @@ z_dim = y_dim*4  # z_dim = 100
 
 BATCH_SIZE = 64
 dump_dir = 'samples/'
-model_path = 'cdcgan_raw/'
+model_path = 'model/'
 
 # Build DCGAN model
 g_net = Generator()
@@ -71,10 +71,10 @@ print('Load model checkpoint')
 
 # create random noise to observe output
 try:
-    rand_t = pickle.load(open('fixed.pkl', 'rb'))
+    rand_t = pickle.load(open(os.path.join(model_path, 'fixed.pkl'), 'rb'))
 except:
     rand_t = next_noise_batch(5, z_dim)
-    pickle.dump(rand_t, open('fixed.pkl', 'wb'))
+    pickle.dump(rand_t, open(os.path.join(model_path, 'fixed.pkl'), 'wb'))
     
 with open(sys.argv[1], 'r') as f:
     for line in f:
