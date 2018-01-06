@@ -158,7 +158,7 @@ iters = 50000
 lr_d = 2e-4
 lr_g = 2e-4
 dump_dir = 'dump/'
-model_path = 'cdcgan/'
+model_path = 'trained_model/'
 
 # Build DCGAN model
 g_net = Generator()

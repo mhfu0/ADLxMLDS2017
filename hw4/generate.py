@@ -41,7 +41,7 @@ z_dim = y_dim*4  # z_dim = 100
 
 BATCH_SIZE = 64
 dump_dir = 'samples/'
-model_path = 'model/'
+model_path = 'trained_model/'
 
 # Build DCGAN model
 g_net = Generator()
