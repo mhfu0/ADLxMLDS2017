@@ -6,6 +6,9 @@ Learning the basic theory of deep learning and how to apply to various applicati
 
 ## Brief Description
 hw1: Sequence labeling using RNN and CNN. Input a frame-level speech sequence and output a phone sequence.
+
 hw2: Video captioning using seq2seq model and attention mechanism. Input a video and output captions of the video.
+
 hw3: Game playing using deep reinforcement learing. Implement REINFORCE and DQN agents for Atari-games.
+
 hw4: Conditional image genearation using Generative Adversarial Network. Input ceretain text and output images conditioning on the discription of the text.
