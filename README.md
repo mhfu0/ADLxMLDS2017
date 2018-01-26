@@ -4,12 +4,13 @@ The repository is made to keep my works for the course: [Applied Deep Learning /
 Learning the basic theory of deep learning and how to apply to various applications.
 
 ### Brief Description
-- hw1: **Sequence labeling using RNN and CNN.** Input a frame-level speech sequence and output a phone sequence.
-- hw2: **Video captioning using seq2seq model and attention mechanism.** Input a video and output captions of the video.
-- hw3: **Game playing using deep reinforcement learing.** Implement REINFORCE and DQN agents for Atari-games.
-- hw4: **Conditional image genearation using DCGAN.** Output images conditioning on the discription of the text.
+- hw1: **Sequence labeling using RNN and CNN.** Output a phone sequence based on a frame-level speech sequence input.
+- hw2: **Video captioning using seq2seq model and attention mechanism.** Output captions based on video features (VGG-16).
+- hw3: **Game playing using deep reinforcement learing.** Implement REINFORCE and DQN agents to learn and play Atari-games.
+- hw4: **Conditional image genearation using DCGAN.** Output images conditioning on the discription of given text.
 
 ### Environment
 `Python 3.5.3` 
 `tensorflow 1.3.0` 
 `Keras 2.0.8`
+`scikit-learn 0.19.0` 
