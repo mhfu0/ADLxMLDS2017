@@ -9,8 +9,9 @@ Learning the basic theory of deep learning and how to apply to various applicati
 - hw3: **Game playing using deep reinforcement learing.** Implement agents to learn and play Atari-games.
 - hw4: **Conditional image genearation using DCGAN.** Generate images conditioning on the discription of given text.
 
-### Environment
+### Requirements
 `Python 3.5.3` 
 `tensorflow 1.3.0` 
 `Keras 2.0.8`
 `scikit-learn 0.19.0` 
+and others
