@@ -15,3 +15,8 @@ Learning the basic theory of deep learning and how to apply to various applicati
 `Keras 2.0.8`
 `scikit-learn 0.19.0` 
 and others
+
+### References
+- [songrotek/DQN-Atari-Tensorflow](https://github.com/songrotek/DQN-Atari-Tensorflow)
+- [mrahtz/tensorflow-rl-pong](https://github.com/mrahtz/tensorflow-rl-pong)
+- [m516825/Conditional-GAN](https://github.com/m516825/Conditional-GAN)
