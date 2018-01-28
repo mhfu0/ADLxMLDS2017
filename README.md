@@ -20,3 +20,4 @@ and others
 - [songrotek/DQN-Atari-Tensorflow](https://github.com/songrotek/DQN-Atari-Tensorflow)
 - [mrahtz/tensorflow-rl-pong](https://github.com/mrahtz/tensorflow-rl-pong)
 - [m516825/Conditional-GAN](https://github.com/m516825/Conditional-GAN)
+- [莫烦Python](https://morvanzhou.github.io/)
